@@ -1,5 +1,4 @@
-import {} from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import { fetchGPUStats } from '../api/gpuApi';
 import type { GPUStats } from '../types/gpu';
 
@@ -15,14 +14,12 @@ export const GPUSelector: React.FC<{
   selectedGPU: string;
   onSelectGPU: (gpuId: string) => void;
 }> = ({ selectedGPU, onSelectGPU }) => {
-  const { data: stats, isLoading, error } = useQuery<Promise<GPUStats>>(
-    'gpu-stats',
-    fetchGPUStats,
-    {
-      refetchInterval: 5000,
-      staleTime: 5000,
-    }
-  );
+  const { data: stats, isLoading, error } = useQuery<Promise<GPUStats>>({
+    queryKey: ['gpu-stats'],
+    queryFn: fetchGPUStats,
+    refetchInterval: 5000,
+    staleTime: 5000,
+  });
 
   if (error) {
     return (
@@ -47,11 +44,10 @@ export const GPUSelector: React.FC<{
           <button
             key="all"
             onClick={() => onSelectGPU('all')}
-            className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-              selectedGPU === 'all'
+            className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${selectedGPU === 'all'
                 ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan'
                 : 'bg-dark-700 hover:bg-dark-600 text-white'
-            }`}
+              }`}
           >
             <div className="font-medium">All GPUs</div>
           </button>
@@ -62,11 +58,10 @@ export const GPUSelector: React.FC<{
               <button
                 key={gpu.index}
                 onClick={() => onSelectGPU(gpu.index.toString())}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  selectedGPU === gpu.index.toString()
+                className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${selectedGPU === gpu.index.toString()
                     ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan'
                     : 'bg-dark-700 hover:bg-dark-600 text-white'
-                }`}
+                  }`}
               >
                 <div className="font-medium">GPU {gpu.index}</div>
                 <div className="text-xs text-dark-600 mt-1">

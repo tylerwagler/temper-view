@@ -8,6 +8,7 @@ interface GaugeChartProps {
     label: string;
     unit: string;
     title: string;
+    subtitle?: string;
     thresholds?: { warning: number; danger: number };
     powerLimitW?: number;  // Current TDP limit in watts
     hardwareMaxW?: number; // Hardware maximum TDP in watts
@@ -24,6 +25,7 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     label,
     unit,
     title,
+    subtitle,
     thresholds = { warning: 70, danger: 90 },
     powerLimitW,
     hardwareMaxW,
@@ -50,11 +52,11 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
 
     // SVG settings
     const width = 200;
-    const height = 180;
+    const height = 160;
     const strokeWidth = 14;
     const radius = 70;
     const cx = width / 2;
-    const cy = 90;
+    const cy = 80;
 
     // Arc goes from 135° to 405° (270° sweep)
     const startAngle = 135;
@@ -183,17 +185,36 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
                     {Math.round(smoothedValue)}
                     <tspan fontSize="16" fill="#94a3b8" dx="2" dy="-10">{unit}</tspan>
                 </text>
+                {/* Title - centered at bottom between arc endpoints */}
+                <text
+                    x={cx}
+                    y={height - 28}
+                    fill="#94a3b8"
+                    fontSize="12"
+                    fontWeight="600"
+                    textAnchor="middle"
+                >
+                    {title}
+                </text>
+                {/* Subtitle - centered below title */}
+                {subtitle && (
+                    <text
+                        x={cx}
+                        y={height - 14}
+                        fill="#94a3b8"
+                        fontSize="10"
+                        fontWeight="600"
+                        textAnchor="middle"
+                    >
+                        {subtitle}
+                    </text>
+                )}
             </svg>
         </div>
     );
 
     if (minimal) {
-        return (
-            <div className="flex flex-col items-center">
-                <h4 className="text-sm font-semibold text-dark-400 mb-2">{title}</h4>
-                {content}
-            </div>
-        );
+        return content;
     }
 
     return (

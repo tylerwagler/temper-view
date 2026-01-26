@@ -46,8 +46,36 @@ export interface TemperGPUMetric {
   throttle_alert: string;
 }
 
+export interface HostMetrics {
+  cpu_load_percent: number;
+  memory_total_mb: number;
+  memory_available_mb: number;
+  load_avg_1m: number;
+  load_avg_5m: number;
+  uptime_seconds: number;
+}
+
+export interface ChassisMetrics {
+  ipmi_available: boolean;
+  inlet_temp_c: number;
+  exhaust_temp_c: number;
+  power_consumption_w: number;
+  cpu_temps_c: number[];
+  fans_rpm: number[];
+  target_fan_percent: number;
+}
+
+export interface HostInfo {
+  host: string;
+  host_metrics: HostMetrics;
+  chassis_metrics: ChassisMetrics;
+}
+
 export interface GPUStats {
-  gpus: TemperGPUMetric[];
+  gpus: (TemperGPUMetric & { host?: string; uniqueId?: string; displayName?: string })[];
+  hosts: HostInfo[];
+  driver_version: string;
+  cuda_version: string;
 }
 
 // Convert Temper's milliwatts to watts
