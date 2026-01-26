@@ -1,0 +1,59 @@
+import { useState, useEffect, useRef } from 'react';
+
+/**
+ * Hook to smooth a value over time
+ * @param value The target value to smooth towards
+ * @param duration Duration of the smoothing in ms (default 300ms)
+ * @returns The current smoothed value
+ */
+export function useSmoothedValue(value: number, duration: number = 300): number {
+    const [currentValue, setCurrentValue] = useState(value);
+    const startValueRef = useRef(value);
+    const targetValueRef = useRef(value);
+    const startTimeRef = useRef<number | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        // If target hasn't changed, do nothing
+        if (value === targetValueRef.current) return;
+
+        // Update target
+        startValueRef.current = currentValue;
+        targetValueRef.current = value;
+        startTimeRef.current = null;
+
+        const animate = (timestamp: number) => {
+            if (!startTimeRef.current) startTimeRef.current = timestamp;
+
+            const elapsed = timestamp - startTimeRef.current;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Easing function (easeOutCubic)
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+
+            const nextValue = startValueRef.current + (targetValueRef.current - startValueRef.current) * easeOut;
+            setCurrentValue(nextValue);
+
+            if (progress < 1) {
+                animationFrameRef.current = requestAnimationFrame(animate);
+            } else {
+                startTimeRef.current = null;
+            }
+        };
+
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+
+        animationFrameRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [value, duration]);
+
+    // If we are very close to target (or at start), just return it to avoid small diffs
+    return currentValue;
+}
