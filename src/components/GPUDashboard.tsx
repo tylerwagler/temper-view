@@ -5,6 +5,7 @@ import { fetchGPUStats } from '../api/gpuApi';
 import { GPUDetailsModal } from './GPUDetailsModal';
 import { CombinedGPUCard } from './charts/CombinedGPUCard';
 import { HostMetricsCard } from './charts/HostMetricsCard';
+import { LlamaCppCard } from './charts/LlamaCppCard';
 import { Settings, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface GPUDashboardProps {
@@ -15,6 +16,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
   const [selectedGPU, setSelectedGPU] = useState<any>(null);
   const [hiddenGPUMetrics, setHiddenGPUMetrics] = useState<Set<number>>(new Set());
   const [hiddenHostMetrics, setHiddenHostMetrics] = useState<Set<string>>(new Set());
+  const [hiddenLlama, setHiddenLlama] = useState(false);
 
   const lastValidDataRef = useRef<{ gpus: any[]; hosts: any[] }>({ gpus: [], hosts: [] });
 
@@ -34,6 +36,10 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
     setHiddenHostMetrics(newHidden);
   };
 
+  const toggleLlamaVisibility = (show?: boolean) => {
+    setHiddenLlama(show === undefined ? !hiddenLlama : !show);
+  };
+
   const { data: stats, isLoading, error } = useQuery({
     queryKey: ['gpu-stats', 'all'],
     queryFn: () => fetchGPUStats(),
@@ -42,6 +48,8 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
     retry: 0,
     retryDelay: 1000,
   });
+
+
 
   useEffect(() => {
     if (stats?.gpus && stats.gpus.length > 0) {
@@ -92,13 +100,13 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
                 <div
                   key={g.uniqueId || idx}
                   onClick={() => setSelectedGPU(g)}
-                  className={`flex flex-col justify-center px-3 py-1.5 rounded border cursor-pointer transition-all min-w-[100px] ${isHidden
+                  className={`flex flex-col justify-center px-3 py-1.5 rounded border cursor-pointer transition-all min-w-12 ${isHidden
                     ? 'bg-dark-900 border-dashed border-dark-600'
                     : 'bg-dark-900 border-dark-700 hover:border-accent-cyan hover:bg-dark-800'
                     }`}
                   title={isHidden ? "Click to Show" : "Click for Details"}
                 >
-                  <span className={`text-[10px] font-bold uppercase mb-0.5 ${isHidden ? 'text-dark-500' : 'text-dark-400'}`}>
+                  <span className="text-[10px] font-bold uppercase text-dark-400">
                     {g.host ? `${g.host.replace(/https?:\/\//, '').split(':')[0]}` : `GPU ${g.index}`}
                   </span>
                   <span className={`text-xs font-semibold whitespace-nowrap truncate max-w-[100px] ${isHidden ? 'text-dark-400 italic' : 'text-white'}`}>
@@ -159,16 +167,22 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
                 return (
                   <section key={h.host} className="space-y-6">
                     <div className="flex flex-wrap gap-6 items-stretch">
-                      {!isHostMetricsHidden && (
-                        <div className="flex-none">
+                      <div className="flex-none flex gap-4">
+                        {!isHostMetricsHidden && (
                           <HostMetricsCard
-                            host={h.host}
                             metrics={h.host_metrics}
                             chassis={h.chassis_metrics}
                             onHide={() => toggleHostMetricsVisibility(h.host, false)}
                           />
-                        </div>
-                      )}
+                        )}
+
+                        {!hiddenLlama && h.ai_service && (
+                          <LlamaCppCard
+                            stats={h.ai_service}
+                            onHide={() => toggleLlamaVisibility(false)}
+                          />
+                        )}
+                      </div>
 
                       {hostGpus.map((g: any) => {
                         if (hiddenGPUMetrics.has(g.index)) return null;

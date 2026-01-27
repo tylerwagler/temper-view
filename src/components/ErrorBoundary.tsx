@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
                             The application encountered an error while rendering. This is likely due to malformed data from the telemetry API.
                         </p>
                         <div className="bg-dark-900 p-4 rounded border border-dark-700 font-mono text-sm text-red-400 mb-6 overflow-auto max-h-48">
-                            {this.state.error?.message}
+                            An unexpected error occurred. Please refresh the page.
                         </div>
                         <button
                             onClick={() => window.location.reload()}

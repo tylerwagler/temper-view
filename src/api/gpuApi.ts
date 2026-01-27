@@ -39,7 +39,13 @@ export async function fetchGPUStats(): Promise<GPUStats> {
       const url = `${host.replace(/\/$/, '')}/metrics`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return { host, data: await res.json() };
+
+      // Temporary fix for backend returning invalid JSON (inf/nan)
+      const rawText = await res.text();
+      // Replace non-compliant numeric values with null
+      const safeJson = rawText.replace(/: ?(inf|-inf|nan)/gi, ': null');
+
+      return { host, data: JSON.parse(safeJson) };
     })
   );
 
@@ -54,7 +60,8 @@ export async function fetchGPUStats(): Promise<GPUStats> {
       aggregatedHosts.push({
         host,
         host_metrics: data.host || {},
-        chassis_metrics: data.chassis || { ipmi_available: false }
+        chassis_metrics: data.chassis || { ipmi_available: false },
+        ai_service: data.ai_service
       });
 
       if (data.gpus && Array.isArray(data.gpus)) {
@@ -84,9 +91,26 @@ export async function fetchGPUStats(): Promise<GPUStats> {
  */
 export async function fetchGPUMetrics(gpuId: string): Promise<TemperGPUMetric[]> {
   const stats = await fetchGPUStats();
-  const gpu = stats.gpus.find((g: any) => g.index === parseInt(gpuId));
-  if (!gpu) {
-    throw new Error(`GPU ${gpuId} not found`);
+
+  // Validate GPU ID input
+  if (!gpuId || !/^\d+$/.test(gpuId)) {
+    throw new Error('Invalid GPU ID: must be a non-empty numeric string');
   }
+
+  const index = parseInt(gpuId, 10);
+  if (index < 0) {
+    throw new Error('GPU index cannot be negative');
+  }
+
+  if (index >= stats.gpus.length) {
+    throw new Error(`GPU index ${index} out of range (available: 0-${stats.gpus.length - 1})`);
+  }
+
+  const gpu = stats.gpus.find((g: any) => g.index === index);
+  if (!gpu) {
+    // This should never happen due to the range check above, but keep as safety net
+    throw new Error(`GPU index ${index} not found`);
+  }
+
   return [gpu];
 }

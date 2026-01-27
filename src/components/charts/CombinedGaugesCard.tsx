@@ -167,6 +167,9 @@ const ThermalGauge: React.FC<{
 };
 
 export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => {
+    // Smooth the power limit to prevent jumpy gauge zones
+    const smoothedPowerLimitW = useSmoothedValue(props.powerLimitW, 2000);
+
     return (
         <div>
             {/* 2x2 Grid with Borders */}
@@ -186,17 +189,45 @@ export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => 
 
                 {/* Row 1, Col 2: Power (Top Right) */}
                 <div className="flex justify-center items-center border-b border-dark-700 p-1 md:border-l-0">
-                    <GaugeChart
-                        value={props.powerUsageW}
-                        max={props.hardwareMaxW}
-                        label=""
-                        unit="W"
-                        title="Power"
-                        thresholds={{ warning: 70, danger: 90 }}
-                        powerLimitW={props.powerLimitW}
-                        hardwareMaxW={props.hardwareMaxW}
-                        minimal={true}
-                    />
+                    {(() => {
+                        // Calculate dynamic thresholds
+                        // Red Zone: PLimit to PMax (100%)
+                        // Yellow Zone: PLimit - 0.5 * (PMax - PLimit) to PLimit
+                        // These need to be percentages of max (which is hardwareMaxW)
+                        let thresholds = { warning: 70, danger: 90 }; // fallback
+                        let showZones = false;
+
+                        if (smoothedPowerLimitW && props.hardwareMaxW && props.hardwareMaxW > 0) {
+                            const pLimit = smoothedPowerLimitW;
+                            const pMax = props.hardwareMaxW;
+
+                            // Only show zones if limiting is active (with small buffer for float inaccuracies)
+                            if (pLimit < pMax - 1) {
+                                const startRed = pLimit;
+                                const startYellow = pLimit - 0.5 * (pMax - pLimit);
+
+                                thresholds = {
+                                    warning: Math.max(0, (startYellow / pMax) * 100),
+                                    danger: Math.min(100, (startRed / pMax) * 100)
+                                };
+                                showZones = true;
+                            }
+                        }
+
+                        return (
+                            <GaugeChart
+                                value={props.powerUsageW}
+                                max={props.hardwareMaxW}
+                                label=""
+                                unit="W"
+                                title="Power"
+                                thresholds={thresholds}
+                                hardwareMaxW={props.hardwareMaxW}
+                                showYellowZone={showZones}
+                                minimal={true}
+                            />
+                        );
+                    })()}
                 </div>
 
                 {/* Row 2, Col 1: Memory (Bottom Left) */}

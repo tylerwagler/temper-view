@@ -65,10 +65,20 @@ export interface ChassisMetrics {
   target_fan_percent: number;
 }
 
+export interface AiServiceMetrics extends LlamaMetrics {
+  status: string;
+  model: string;
+  model_path?: string;
+  n_ctx?: number;
+  slots_used: number;
+  slots_total: number;
+}
+
 export interface HostInfo {
   host: string;
   host_metrics: HostMetrics;
   chassis_metrics: ChassisMetrics;
+  ai_service?: AiServiceMetrics;
 }
 
 export interface GPUStats {
@@ -92,3 +102,56 @@ export interface GPUTelemetryWebSocketMessage {
   data?: any;
   timestamp: number;
 }
+
+// Llama.cpp Router Types
+export interface LlamaModel {
+  id: string;
+  object: string;
+  owned_by: string;
+  created: number;
+  status: {
+    value: 'loaded' | 'unloaded';
+    args?: string[];
+    preset?: string;
+  };
+}
+
+export interface LlamaSlotToken {
+  has_next_token: boolean;
+  has_new_line: boolean;
+  n_remain: number;
+  n_decoded: number;
+}
+
+export interface LlamaSlot {
+  id: number;
+  n_ctx: number;
+  speculative: boolean;
+  is_processing: boolean;
+  id_task: number;
+  next_token?: LlamaSlotToken[];
+}
+
+export interface LlamaMetrics {
+  prompt_tokens_total: number;
+  prompt_seconds_total: number;
+  tokens_predicted_total: number;
+  tokens_predicted_seconds_total: number;
+  prompt_tokens_seconds: number;
+  predicted_tokens_seconds: number;
+  requests_processing: number;
+  requests_deferred: number;
+  n_decode_total: number;
+  n_tokens_max: number;
+  n_busy_slots_per_decode: number;
+  kv_cache_usage_ratio: number;
+  kv_cache_tokens: number;
+}
+
+export interface LlamaStats {
+  models: LlamaModel[];
+  activeSlots: LlamaSlot[];
+  loadedModel?: LlamaModel;
+  metrics?: LlamaMetrics;
+}
+

@@ -81,17 +81,53 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
     };
 
-    // Calculate the angle for the current value
-    const valueAngle = startAngle + (percentage / 100) * sweepAngle;
+    // Create filled sector path for zones with custom caps
+    const createSectorPath = (startDeg: number, endDeg: number, innerR: number, outerR: number) => {
+        const startOuter = angleToCoord(startDeg, outerR);
+        const endOuter = angleToCoord(endDeg, outerR);
+        const startInner = angleToCoord(startDeg, innerR);
+        const endInner = angleToCoord(endDeg, innerR);
 
-    // Calculate zone angles
+        const sweep = endDeg - startDeg;
+        const largeArc = sweep > 180 ? 1 : 0;
+
+        // Path:
+        // 1. Move to Start Outer
+        // 2. Arc to End Outer
+        // 3. Line to End Inner (Butt cap) OR Arc to End Inner (Round cap) - effectively we control this by drawing the shape.
+        // Actually for the "end cap" to be round, we need an arc from EndOuter to EndInner with radius = (outerR - innerR)/2.
+        // For "start cap" to be round, we need arc from StartInner to StartOuter.
+
+        // In our specific case:
+        // Yellow: Start Butt, End Butt.
+        // Red: Start Butt, End Round.
+
+        return {
+            buttButt: `
+                M ${startOuter.x} ${startOuter.y}
+                A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}
+                L ${endInner.x} ${endInner.y}
+                A ${innerR} ${innerR} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}
+                Z
+            `,
+            buttRound: `
+                M ${startOuter.x} ${startOuter.y}
+                A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}
+                A ${(outerR - innerR) / 2} ${(outerR - innerR) / 2} 0 1 1 ${endInner.x} ${endInner.y}
+                A ${innerR} ${innerR} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}
+                Z
+            `
+        };
+    };
+
+    // Calculate angles
+    const valueAngle = startAngle + (percentage / 100) * sweepAngle;
     const warningAngle = startAngle + (thresholds.warning / 100) * sweepAngle;
     const dangerAngle = startAngle + (thresholds.danger / 100) * sweepAngle;
 
-    // Power limit zone
-    const powerLimitAngle = powerLimitW && hardwareMaxW
-        ? startAngle + ((powerLimitW - min) / (hardwareMaxW - min)) * sweepAngle
-        : null;
+    // For filled paths
+    const outerR = radius + strokeWidth / 2;
+    const innerR = radius - strokeWidth / 2;
 
     const content = (
         <div className="flex flex-col items-center">
@@ -105,37 +141,21 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
                     strokeLinecap="round"
                 />
 
-                {/* Yellow warning zone */}
+                {/* Yellow warning zone (Butt-Butt) */}
                 {showYellowZone && (
                     <path
-                        d={createArc(warningAngle, dangerAngle, radius)}
-                        fill="none"
-                        stroke="#f59e0b"
-                        strokeWidth={strokeWidth}
-                        strokeOpacity={0.3}
+                        d={createSectorPath(warningAngle, dangerAngle, innerR, outerR).buttButt}
+                        fill="#f59e0b"
+                        fillOpacity={0.3}
                     />
                 )}
 
-                {/* Red danger zone */}
+                {/* Red danger zone (Butt-Round) */}
                 {showYellowZone && (
                     <path
-                        d={createArc(dangerAngle, endAngle, radius)}
-                        fill="none"
-                        stroke="#ef4444"
-                        strokeWidth={strokeWidth}
-                        strokeOpacity={0.3}
-                    />
-                )}
-
-                {/* Power limit red zone */}
-                {powerLimitAngle && (
-                    <path
-                        d={createArc(powerLimitAngle, endAngle, radius)}
-                        fill="none"
-                        stroke="#ef4444"
-                        strokeWidth={strokeWidth}
-                        strokeOpacity={0.4}
-                        strokeLinecap="round"
+                        d={createSectorPath(dangerAngle, endAngle, innerR, outerR).buttRound}
+                        fill="#ef4444"
+                        fillOpacity={0.3}
                     />
                 )}
 

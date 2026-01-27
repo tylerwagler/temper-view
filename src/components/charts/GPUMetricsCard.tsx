@@ -120,7 +120,7 @@ export const GPUMetricsCard: React.FC<GPUMetricsCardProps> = ({
     clocks,
     pState,
     pcie,
-    gpuLabel,
+    // gpuLabel,
     onHide
 }) => {
     const smoothedGpuLoad = useSmoothedValue(gpuLoadPercent, 500);
@@ -135,8 +135,7 @@ export const GPUMetricsCard: React.FC<GPUMetricsCardProps> = ({
     return (
         <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[800px] relative group">
             <div className="flex justify-between items-center mb-4 pr-6">
-                <h3 className="text-lg font-semibold text-white">GPU Metrics</h3>
-                <span className="text-sm text-dark-600">{gpuLabel}</span>
+                <h3 className="text-lg font-semibold text-white">GPU</h3>
             </div>
 
             {onHide && (
@@ -146,7 +145,7 @@ export const GPUMetricsCard: React.FC<GPUMetricsCardProps> = ({
                         onHide();
                     }}
                     className="absolute top-1.5 right-1.5 text-dark-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                    title="Hide GPU Metrics"
+                    title="Hide GPU"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

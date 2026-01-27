@@ -44,12 +44,11 @@ export const CombinedGPUCard: React.FC<CombinedGPUCardProps> = (props) => {
             {/* Combined header */}
             <div className="flex justify-between items-center mb-4 pr-6">
                 <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-white">GPU Metrics</h3>
+                    <h3 className="text-lg font-semibold text-white">GPU</h3>
                     <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-accent-cyan border border-dark-600 cursor-help" title={`Performance State: ${props.pState.description}`}>
                         P{props.pState.id}
                     </span>
                 </div>
-                <span className="text-sm text-dark-600">{props.gpuLabel}</span>
             </div>
 
             {/* Single hide button for whole card */}

@@ -4,7 +4,7 @@ import { useSmoothedValue } from '../../hooks/useSmoothedValue';
 import type { HostMetrics, ChassisMetrics } from '../../types/gpu';
 
 interface HostMetricsCardProps {
-    host: string;
+    // host: string; // Unused
     metrics: HostMetrics;
     chassis: ChassisMetrics;
     onHide?: () => void;
@@ -51,7 +51,7 @@ const FanModal: React.FC<FanModalProps> = ({ fans, targetPercent, onClose }) => 
     );
 };
 
-export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ host, metrics, chassis, onHide }) => {
+export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chassis, onHide }) => {
     const [showFanModal, setShowFanModal] = useState(false);
     const smoothedCpu = useSmoothedValue(metrics?.cpu_load_percent || 0, 500);
     const memTotal = metrics?.memory_total_mb || 1;
@@ -59,8 +59,6 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ host, metrics,
     const memUsed = memTotal - memAvail;
     const memPercent = (memUsed / memTotal) * 100;
     const smoothedMem = useSmoothedValue(memPercent, 500);
-
-    const hostDisplay = host.replace(/https?:\/\//, '').split(':')[0];
 
     // Calculate average fan speed and detect faults
     const fans = chassis?.fans_rpm || [];
@@ -75,8 +73,7 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ host, metrics,
         <>
             <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[220px] max-w-[220px] relative group">
                 <div className="flex justify-between items-center mb-4 pr-6">
-                    <h3 className="text-lg font-semibold text-white">Host Metrics</h3>
-                    <span className="text-sm text-dark-600">{hostDisplay}</span>
+                    <h3 className="text-lg font-semibold text-white">Host</h3>
                 </div>
 
                 {onHide && (
@@ -141,7 +138,10 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ host, metrics,
                             {(chassis?.cpu_temps_c || []).map((temp, idx) => (
                                 <div key={`cpu-${idx}`} className="flex justify-between items-center">
                                     <span className="text-[9px] text-dark-600">CPU{idx}</span>
-                                    <span className="text-sm font-bold text-cyan-400 font-mono">{temp}°C</span>
+                                    <span className={`text-sm font-bold font-mono ${temp > 90 ? 'text-red-500' :
+                                        temp > 70 ? 'text-orange-400' :
+                                            'text-green-400'
+                                        }`}>{temp}°C</span>
                                 </div>
                             ))}
                         </div>
