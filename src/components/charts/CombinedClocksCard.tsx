@@ -86,6 +86,31 @@ export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, 
         return `${Math.round(kbs)} KB/s`;
     };
 
+    // Logarithmic scale helper to make low activity visible
+    // 100 KB/s -> ~10%
+    // 1 MB/s -> ~20%
+    // 10 MB/s -> ~35%
+    // 100 MB/s -> ~50%
+    // 1 GB/s -> ~65%
+    // 10 GB/s -> ~80%
+    // 32 GB/s -> 100%
+    const calcLogPercent = (currentKbs: number, maxKbs: number) => {
+        if (currentKbs <= 1) return 0;
+
+        // Use Math.log10 for a natural feel
+        // We want 10KB to be visible, so let's shift scale
+        const minLog = Math.log10(10); // 10 KB/s baseline
+        const maxLog = Math.log10(maxKbs); // ~32,000,000 KB/s
+        const curLog = Math.log10(Math.max(10, currentKbs));
+
+        const percent = ((curLog - minLog) / (maxLog - minLog)) * 100;
+        return Math.min(100, Math.max(0, percent));
+    };
+
+    const maxSpeedKbs = maxSpeedMB * 1024;
+    const txLogUtil = calcLogPercent(smoothedTx, maxSpeedKbs);
+    const rxLogUtil = calcLogPercent(smoothedRx, maxSpeedKbs);
+
     return (
         <div>
             {/* Clocks Section */}
@@ -138,32 +163,32 @@ export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, 
                 <div className="space-y-4">
                     <div>
                         <div className="flex justify-between text-sm mb-1 text-dark-400">
-                            <span>TX</span>
+                            <span>TX (Transmit)</span>
                             <div className="text-right">
                                 <span className="text-white font-mono mr-2">{formatSpeed(smoothedTx)}</span>
-                                <span className="text-xs text-dark-500">({txUtil.toFixed(2)}%)</span>
+                                <span className="text-xs text-dark-500" title="Linear Utilization">({txUtil.toFixed(2)}%)</span>
                             </div>
                         </div>
                         <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-accent-cyan transition-all duration-300"
-                                style={{ width: `${Math.max(1, txUtil)}%` }}
+                                style={{ width: `${Math.max(2, txLogUtil)}%` }} // Min 2% visibility if active
                             />
                         </div>
                     </div>
 
                     <div>
                         <div className="flex justify-between text-sm mb-1 text-dark-400">
-                            <span>RX</span>
+                            <span>RX (Receive)</span>
                             <div className="text-right">
                                 <span className="text-white font-mono mr-2">{formatSpeed(smoothedRx)}</span>
-                                <span className="text-xs text-dark-500">({rxUtil.toFixed(2)}%)</span>
+                                <span className="text-xs text-dark-500" title="Linear Utilization">({rxUtil.toFixed(2)}%)</span>
                             </div>
                         </div>
                         <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-green-500 transition-all duration-300"
-                                style={{ width: `${Math.max(1, rxUtil)}%` }}
+                                style={{ width: `${Math.max(2, rxLogUtil)}%` }} // Min 2% visibility if active
                             />
                         </div>
                     </div>

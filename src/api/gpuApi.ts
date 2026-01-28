@@ -19,7 +19,8 @@ const getApiHosts = (): string[] => {
   const env = import.meta.env.VITE_GPU_API_BASE;
   if (env) return [env];
 
-  return [];
+  // Default to relative path /api for reverse proxy setup
+  return ['/api'];
 };
 
 /**

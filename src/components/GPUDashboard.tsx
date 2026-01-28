@@ -10,9 +10,10 @@ import { Settings, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface GPUDashboardProps {
   onOpenSettings?: () => void;
+  hideHeader?: boolean;
 }
 
-export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) => {
+export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hideHeader = false }) => {
   const [selectedGPU, setSelectedGPU] = useState<any>(null);
   const [hiddenGPUMetrics, setHiddenGPUMetrics] = useState<Set<number>>(new Set());
   const [hiddenHostMetrics, setHiddenHostMetrics] = useState<Set<string>>(new Set());
@@ -77,61 +78,63 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
   const showNoData = !isLoading && gpus.length === 0 && hostsData.length === 0;
 
   return (
-    <div className="min-h-screen bg-dark-900 text-white font-sans">
-      <header className="bg-dark-800 border-b border-dark-700 sticky top-0 z-10 shadow-lg bg-opacity-90 backdrop-blur-sm">
-        <div className="flex flex-col md:flex-row justify-between items-center px-6 py-2 gap-4 md:gap-0">
-          <div className="flex items-center gap-6">
-            <h1 className="text-xl font-bold bg-gradient-to-r from-accent-cyan to-blue-500 bg-clip-text text-transparent">
-              TemperView
-            </h1>
-            <button
-              onClick={onOpenSettings}
-              className="text-dark-400 hover:text-white transition-colors p-1 rounded-md hover:bg-dark-700"
-              title="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
+    <div className={`min-h-screen bg-dark-900 text-white font-sans ${hideHeader ? 'bg-transparent' : ''}`}>
+      {!hideHeader && (
+        <header className="bg-dark-800 border-b border-dark-700 sticky top-0 z-10 shadow-lg bg-opacity-90 backdrop-blur-sm">
+          <div className="flex flex-col md:flex-row justify-between items-center px-6 py-2 gap-4 md:gap-0">
+            <div className="flex items-center gap-6">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-accent-cyan to-blue-500 bg-clip-text text-transparent">
+                TemperView
+              </h1>
+              <button
+                onClick={onOpenSettings}
+                className="text-dark-400 hover:text-white transition-colors p-1 rounded-md hover:bg-dark-700"
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 md:pb-0">
-            {gpus.map((g: any, idx: number) => {
-              const isHidden = hiddenGPUMetrics.has(g.index);
-              return (
-                <div
-                  key={g.uniqueId || idx}
-                  onClick={() => setSelectedGPU(g)}
-                  className={`flex flex-col justify-center px-3 py-1.5 rounded border cursor-pointer transition-all min-w-12 ${isHidden
-                    ? 'bg-dark-900 border-dashed border-dark-600'
-                    : 'bg-dark-900 border-dark-700 hover:border-accent-cyan hover:bg-dark-800'
-                    }`}
-                  title={isHidden ? "Click to Show" : "Click for Details"}
-                >
-                  <span className="text-[10px] font-bold uppercase text-dark-400">
-                    {g.host ? `${g.host.replace(/https?:\/\//, '').split(':')[0]}` : `GPU ${g.index}`}
-                  </span>
-                  <span className={`text-xs font-semibold whitespace-nowrap truncate max-w-[100px] ${isHidden ? 'text-dark-400 italic' : 'text-white'}`}>
-                    GPU {g.index}: {g.name.split(' ').pop()}
-                  </span>
-                </div>
-              );
-            })}
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 md:pb-0">
+              {gpus.map((g: any, idx: number) => {
+                const isHidden = hiddenGPUMetrics.has(g.index);
+                return (
+                  <div
+                    key={g.uniqueId || idx}
+                    onClick={() => setSelectedGPU(g)}
+                    className={`flex flex-col justify-center px-3 py-1.5 rounded border cursor-pointer transition-all min-w-12 ${isHidden
+                      ? 'bg-dark-900 border-dashed border-dark-600'
+                      : 'bg-dark-900 border-dark-700 hover:border-accent-cyan hover:bg-dark-800'
+                      }`}
+                    title={isHidden ? "Click to Show" : "Click for Details"}
+                  >
+                    <span className="text-[10px] font-bold uppercase text-dark-600">
+                      GPU {g.index}
+                    </span>
+                    <span className={`text-sm font-semibold whitespace-nowrap truncate max-w-[200px] ${isHidden ? 'text-dark-400 italic' : 'text-white'}`}>
+                      {g.name}
+                    </span>
+                  </div>
+                );
+              })}
 
-            <div className="ml-4 flex items-center gap-2 px-3 py-1 bg-dark-900/50 rounded-full border border-dark-700">
-              {isSystemHealty ? (
-                <ShieldCheck className="w-4 h-4 text-accent-green" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
-              )}
-              <span className="text-[10px] font-bold uppercase text-dark-400">
-                {isSystemHealty ? 'System Normal' : 'System Alert'}
-              </span>
+              <div className="ml-4 flex items-center gap-2 px-3 py-1 bg-dark-900/50 rounded-full border border-dark-700">
+                {isSystemHealty ? (
+                  <ShieldCheck className="w-4 h-4 text-accent-green" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
+                )}
+                <span className="text-[10px] font-bold uppercase text-dark-400">
+                  {isSystemHealty ? 'System Normal' : 'System Alert'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      <div className="p-6">
-        <main className="max-w-[95%] mx-auto">
+      <div className={hideHeader ? 'p-0' : 'p-3'}>
+        <main className={hideHeader ? 'w-full' : 'w-full'}>
           {isLoading ? (
             <div className="bg-dark-800 rounded-lg p-12 text-center">
               <div className="text-dark-600 animate-pulse">Loading telemetry data...</div>
@@ -166,10 +169,11 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
 
                 return (
                   <section key={h.host} className="space-y-6">
-                    <div className="flex flex-wrap gap-6 items-stretch">
-                      <div className="flex-none flex gap-4">
+                    <div className="flex flex-wrap gap-3 items-stretch">
+                      <div className="flex-none flex gap-3">
                         {!isHostMetricsHidden && (
                           <HostMetricsCard
+                            host={h.host}
                             metrics={h.host_metrics}
                             chassis={h.chassis_metrics}
                             onHide={() => toggleHostMetricsVisibility(h.host, false)}
@@ -203,6 +207,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings }) =>
                               clocks={g.clocks}
                               pState={g.p_state}
                               pcie={g.pcie}
+                              gpuName={g.name ?? 'GPU'}
                               gpuLabel={g.host ? `${g.host.replace(/https?:\/\//, '').split(':')[0]}: GPU${g.index}` : `GPU ${g.index}`}
                               onHide={() => toggleGPUMetricsVisibility(g.index, false)}
                             />

@@ -4,7 +4,7 @@ import { useSmoothedValue } from '../../hooks/useSmoothedValue';
 import type { HostMetrics, ChassisMetrics } from '../../types/gpu';
 
 interface HostMetricsCardProps {
-    // host: string; // Unused
+    host: string;
     metrics: HostMetrics;
     chassis: ChassisMetrics;
     onHide?: () => void;
@@ -38,12 +38,20 @@ const FanModal: React.FC<FanModalProps> = ({ fans, targetPercent, onClose }) => 
                         Target: <span className="text-white font-mono">{targetPercent}%</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        {fans.map((rpm, idx) => (
-                            <div key={idx} className="p-3 bg-dark-900/50 rounded-lg border border-dark-700">
-                                <div className="text-xs text-dark-500 mb-1">Fan {idx}</div>
-                                <div className="text-lg font-mono text-white">{rpm} <span className="text-xs text-dark-600">RPM</span></div>
-                            </div>
-                        ))}
+                        {fans.map((rpm, idx) => {
+                            // Replicate fault logic: 0 RPM or >5% deviation
+                            const avg = fans.length > 0 ? fans.reduce((a, b) => a + b, 0) / fans.length : 0;
+                            const isFaulty = rpm === 0 || (Math.abs(rpm - avg) / avg > 0.05);
+
+                            return (
+                                <div key={idx} className={`p-3 bg-dark-900/50 rounded-lg border ${isFaulty ? 'border-red-500/50' : 'border-dark-700'}`}>
+                                    <div className="text-xs text-dark-500 mb-1">Fan {idx + 1}</div>
+                                    <div className={`text-lg font-mono ${isFaulty ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                                        {rpm} <span className="text-xs text-dark-600">RPM</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -51,8 +59,12 @@ const FanModal: React.FC<FanModalProps> = ({ fans, targetPercent, onClose }) => 
     );
 };
 
-export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chassis, onHide }) => {
+export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ host, metrics, chassis, onHide }) => {
     const [showFanModal, setShowFanModal] = useState(false);
+
+    // Use hostname from metrics, fallback to parsing host URL
+    const hostname = metrics?.hostname || host.replace(/^https?:\/\//, '').split(':')[0];
+
     const smoothedCpu = useSmoothedValue(metrics?.cpu_load_percent || 0, 500);
     const memTotal = metrics?.memory_total_mb || 1;
     const memAvail = metrics?.memory_available_mb || 0;
@@ -69,11 +81,34 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chass
         return (diff / avgFan) > 0.05; // More than 5% out of family
     });
 
+    // Fan Bar Logic (Based on Target Percentage)
+    const targetFanPercent = chassis?.target_fan_percent || 0;
+    const smoothedTargetPercent = useSmoothedValue(targetFanPercent, 2000);
+    const smoothedAvgFanRpm = useSmoothedValue(avgFan, 2000);
+
+    const getFanColor = () => {
+        if (isFanFaulty) return 'bg-red-500 animate-pulse';
+        if (smoothedTargetPercent >= 90) return 'bg-red-500';
+        if (smoothedTargetPercent >= 70) return 'bg-orange-500';
+        return 'bg-green-500';
+    };
+
+    // Power consumption color (dual 1100W PSUs = 2200W total capacity)
+    const TOTAL_PSU_CAPACITY_W = 2200;
+    const powerConsumption = chassis?.power_consumption_w || 0;
+    const powerUtilization = (powerConsumption / TOTAL_PSU_CAPACITY_W) * 100;
+
+    const getPowerColor = () => {
+        if (powerUtilization >= 85) return 'text-red-500';
+        if (powerUtilization >= 70) return 'text-yellow-400';
+        return 'text-green-400';
+    };
+
     return (
         <>
             <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[220px] max-w-[220px] relative group">
-                <div className="flex justify-between items-center mb-4 pr-6">
-                    <h3 className="text-lg font-semibold text-white">Host</h3>
+                <div className="flex justify-between items-center mb-2 pr-6">
+                    <h3 className="text-lg font-semibold text-white truncate" title={hostname}>Host: {hostname}</h3>
                 </div>
 
                 {onHide && (
@@ -93,7 +128,7 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chass
 
                 {/* Single Column Layout */}
                 <div className="flex flex-col gap-3">
-                    {/* CPU Load & Power */}
+                    {/* CPU Load */}
                     <div className="flex flex-col items-center justify-center p-1 border-b border-dark-700 pb-2">
                         <GaugeChart
                             value={smoothedCpu}
@@ -101,10 +136,47 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chass
                             label=""
                             unit="%"
                             title="CPU Load"
-                            subtitle={`${chassis?.power_consumption_w || 0}W`}
+                            subtitle=""
                             color="#22c55e"
                             minimal
                         />
+                    </div>
+
+                    {/* Power */}
+                    <div className="px-2 border-b border-dark-700 pb-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] text-dark-500">Power</span>
+                            <span className={`text-sm font-bold font-mono ${getPowerColor()}`}>{chassis?.power_consumption_w || 0}W</span>
+                        </div>
+
+                        {/* PSU Status Boxes */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {/* PSU 1 */}
+                            <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border ${chassis?.psu1_voltage_v > 0 ? 'bg-green-500/10 border-green-500/50' : 'bg-red-500/10 border-red-500/50'}`}>
+                                <svg className={`w-3 h-3 ${chassis?.psu1_voltage_v > 0 ? 'text-green-500' : 'text-red-500'}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
+                                </svg>
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] text-dark-600 leading-none">PSU1</span>
+                                    <span className={`text-[9px] font-mono leading-tight ${chassis?.psu1_voltage_v > 0 ? 'text-dark-400' : 'text-red-500'}`}>
+                                        {chassis?.psu1_voltage_v > 0 ? `${chassis.psu1_voltage_v.toFixed(0)}V ${chassis.psu1_current_a.toFixed(1)}A` : 'Offline'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* PSU 2 */}
+                            <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border ${chassis?.psu2_voltage_v > 0 ? 'bg-green-500/10 border-green-500/50' : 'bg-red-500/10 border-red-500/50'}`}>
+                                <svg className={`w-3 h-3 ${chassis?.psu2_voltage_v > 0 ? 'text-green-500' : 'text-red-500'}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
+                                </svg>
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] text-dark-600 leading-none">PSU2</span>
+                                    <span className={`text-[9px] font-mono leading-tight ${chassis?.psu2_voltage_v > 0 ? 'text-dark-400' : 'text-red-500'}`}>
+                                        {chassis?.psu2_voltage_v > 0 ? `${chassis.psu2_voltage_v.toFixed(0)}V ${chassis.psu2_current_a.toFixed(1)}A` : 'Offline'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Memory (No % readout) */}
@@ -121,31 +193,23 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chass
                         </div>
                     </div>
 
-                    {/* Consolidated Temps (Chassis + CPU) */}
-                    <div className="px-2 border-b border-dark-700 pb-3">
-                        <div className="text-[10px] text-dark-500 mb-2 text-center">Temperature</div>
-                        <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-                            {/* Chassis Temps */}
-                            <div className="flex justify-between items-center">
-                                <span className="text-[9px] text-dark-600">Inlet</span>
-                                <span className="text-sm font-bold text-green-400 font-mono">{chassis?.inlet_temp_c || 0}°C</span>
+                    {/* CPU Temps */}
+                    {(chassis?.cpu_temps_c || []).length > 0 && (
+                        <div className="px-2 border-b border-dark-700 pb-3">
+                            <div className="text-[10px] text-dark-500 mb-2 text-center">CPU Temperature</div>
+                            <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                                {(chassis?.cpu_temps_c || []).map((temp, idx) => (
+                                    <div key={`cpu-${idx}`} className="flex justify-between items-center">
+                                        <span className="text-[9px] text-dark-600">CPU{idx}</span>
+                                        <span className={`text-sm font-bold font-mono ${temp > 90 ? 'text-red-500' :
+                                            temp > 70 ? 'text-orange-400' :
+                                                'text-green-400'
+                                            }`}>{temp}°C</span>
+                                    </div>
+                                ))}
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-[9px] text-dark-600">Exhaust</span>
-                                <span className="text-sm font-bold text-orange-400 font-mono">{chassis?.exhaust_temp_c || 0}°C</span>
-                            </div>
-                            {/* CPU Temps */}
-                            {(chassis?.cpu_temps_c || []).map((temp, idx) => (
-                                <div key={`cpu-${idx}`} className="flex justify-between items-center">
-                                    <span className="text-[9px] text-dark-600">CPU{idx}</span>
-                                    <span className={`text-sm font-bold font-mono ${temp > 90 ? 'text-red-500' :
-                                        temp > 70 ? 'text-orange-400' :
-                                            'text-green-400'
-                                        }`}>{temp}°C</span>
-                                </div>
-                            ))}
                         </div>
-                    </div>
+                    )}
 
                     {/* Fans (Clickable) */}
                     <div
@@ -161,12 +225,12 @@ export const HostMetricsCard: React.FC<HostMetricsCardProps> = ({ metrics, chass
                         </div>
                         <div className="w-full bg-dark-700 rounded-full h-1.5 mb-1">
                             <div
-                                className={`h-1.5 rounded-full transition-all duration-300 ${isFanFaulty ? 'bg-red-500' : 'bg-green-500'}`}
-                                style={{ width: `${chassis?.target_fan_percent || 0}%` }}
+                                className={`h-1.5 rounded-full transition-all duration-300 ${getFanColor()}`}
+                                style={{ width: `${Math.min(100, smoothedTargetPercent)}%` }}
                             />
                         </div>
                         <div className={`text-right text-[10px] font-mono ${isFanFaulty ? 'text-red-500' : 'text-dark-500'}`}>
-                            ~{avgFan} RPM
+                            ~{Math.round(smoothedAvgFanRpm)} RPM
                         </div>
                     </div>
                 </div>

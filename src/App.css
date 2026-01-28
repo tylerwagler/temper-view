@@ -1,14 +1,30 @@
 @import "tailwindcss";
 
 @theme {
+  --color-dark-950: #020617;
   --color-dark-900: #0f172a;
   --color-dark-800: #1e293b;
   --color-dark-700: #334155;
   --color-dark-600: #475569;
+  --color-dark-500: #64748b;
+  --color-dark-400: #94a3b8;
+  --color-dark-300: #cbd5e1;
   --color-accent-cyan: #06b6d4;
   --color-accent-green: #22c55e;
   --color-accent-red: #ef4444;
   --color-accent-orange: #f97316;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  body {
+    @apply bg-dark-950 text-white antialiased;
+    background-color: #020617; /* Fallback */
+    color: white;
+  }
 }
 
 /* Custom scrollbar */

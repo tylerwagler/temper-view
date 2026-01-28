@@ -97,6 +97,34 @@ const ThermalGauge: React.FC<{
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
     };
 
+    // Create filled sector path for zones (copied from GaugeChart)
+    const createSectorPath = (startDeg: number, endDeg: number, innerR: number, outerR: number) => {
+        const startOuter = angleToCoord(startDeg, outerR);
+        const endOuter = angleToCoord(endDeg, outerR);
+        const startInner = angleToCoord(startDeg, innerR);
+        const endInner = angleToCoord(endDeg, innerR);
+
+        const sweep = endDeg - startDeg;
+        const largeArc = sweep > 180 ? 1 : 0;
+
+        return {
+            buttButt: `
+                M ${startOuter.x} ${startOuter.y}
+                A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}
+                L ${endInner.x} ${endInner.y}
+                A ${innerR} ${innerR} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}
+                Z
+            `,
+            buttRound: `
+                M ${startOuter.x} ${startOuter.y}
+                A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}
+                A ${(outerR - innerR) / 2} ${(outerR - innerR) / 2} 0 1 1 ${endInner.x} ${endInner.y}
+                A ${innerR} ${innerR} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}
+                Z
+            `
+        };
+    };
+
     const tempPercentage = Math.min(100, Math.max(0, (smoothedTemp / maxTemp) * 100));
     const valueAngle = startAngle + (tempPercentage / 100) * sweepAngle;
 
@@ -109,22 +137,43 @@ const ThermalGauge: React.FC<{
     if (smoothedTemp >= dangerTemp) color = '#ef4444';
     else if (smoothedTemp >= warningTemp) color = '#f97316';
 
+    const outerR = radius + strokeWidth / 2;
+    const innerR = radius - strokeWidth / 2;
+
     return (
         <div className="flex flex-col items-center">
             <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
                 {/* Background */}
-                <path d={createArc(startAngle, endAngle)} fill="none" stroke="#334155" strokeWidth={strokeWidth} strokeLinecap="round" />
+                <path
+                    d={createArc(startAngle, endAngle)}
+                    fill="none"
+                    stroke="#334155"
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                />
 
-                {/* Warning Zone */}
-                <path d={createArc(warningAngle, dangerAngle)} fill="none" stroke="#69522a" strokeWidth={strokeWidth} strokeLinecap="butt" />
-                <path d={`M ${angleToCoord(warningAngle).x} ${angleToCoord(warningAngle).y} l 0 0`} fill="none" stroke="#69522a" strokeWidth={strokeWidth} strokeLinecap="round" />
+                {/* Warning Zone (Fill) */}
+                <path
+                    d={createSectorPath(warningAngle, dangerAngle, innerR, outerR).buttButt}
+                    fill="#f59e0b"
+                    fillOpacity={0.3}
+                />
 
-                {/* Danger Zone */}
-                <path d={createArc(dangerAngle, endAngle)} fill="none" stroke="#67323e" strokeWidth={strokeWidth} strokeLinecap="butt" />
-                <path d={`M ${angleToCoord(endAngle).x} ${angleToCoord(endAngle).y} l 0 0`} fill="none" stroke="#67323e" strokeWidth={strokeWidth} strokeLinecap="round" />
+                {/* Danger Zone (Fill) */}
+                <path
+                    d={createSectorPath(dangerAngle, endAngle, innerR, outerR).buttRound}
+                    fill="#ef4444"
+                    fillOpacity={0.3}
+                />
 
                 {/* Value Arc */}
-                <path d={createArc(startAngle, valueAngle)} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+                <path
+                    d={createArc(startAngle, valueAngle)}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                />
 
                 {/* Labels */}
                 <text x={35} y={height - 10} fill="#94a3b8" fontSize="12" textAnchor="middle">0</text>

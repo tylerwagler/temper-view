@@ -8,46 +8,39 @@ interface LlamaCppCardProps {
 }
 
 export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => {
-    // Extract model name from model or model_path
-    const rawModel = stats?.model || (stats?.model_path ? stats.model_path.split('/').pop() : null);
-    // If model is a path (contains /), take the last part
-    const modelName = rawModel ? rawModel.split('/').pop() : null;
+    // Use the alias from stats.model
+    const modelName = stats?.model || null;
 
     if (!stats || !modelName) {
         return (
-            <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[220px] max-w-[220px]">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-white">AI</h3>
+            <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[300px] max-w-[300px]">
+                <div className="flex flex-col mb-2 border-b border-dark-700 pb-3">
+                    <h3 className="text-lg font-semibold text-white mb-1">AI: No Model Active</h3>
+                    <div className="inline-flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-dark-600"></span>
+                        <span className="text-xs text-dark-500">Offline</span>
+                    </div>
                 </div>
                 <div className="text-center text-dark-500 text-sm py-8">
-                    No model active
+                    No model loaded
                 </div>
             </div>
         );
     }
 
-    // Context size and usage from unified stats
-    // Prioritize n_ctx if available, otherwise n_tokens_max
-    const ctxSize = stats.n_ctx || stats.n_tokens_max;
-
-    // Calculate context used
-    // If we have n_ctx and ratio, we can calculate used tokens more accurately
-    // Otherwise fallback to existing logic
-    const contextUsed = ctxSize && stats.kv_cache_usage_ratio
-        ? Math.round(ctxSize * stats.kv_cache_usage_ratio)
-        : (stats.kv_cache_tokens || 0);
-
-    const contextPercent = (stats.kv_cache_usage_ratio || 0) * 100;
-
     // Smoothing for TPS and usage
     const smoothedTPS = useSmoothedValue(stats.predicted_tokens_seconds || 0, 100);
-    const smoothedContextUsed = useSmoothedValue(contextUsed, 500);
-    const smoothedContextPercent = useSmoothedValue(contextPercent, 500);
 
     return (
-        <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[220px] max-w-[220px] relative group overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center mb-4 pr-6 flex-none">
-                <h3 className="text-lg font-semibold text-white">AI</h3>
+        <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full min-w-[300px] max-w-[300px] relative group overflow-hidden flex flex-col">
+            <div className="flex flex-col mb-2 pr-6 flex-none border-b border-dark-700 pb-3">
+                <h3 className="text-lg font-semibold text-white truncate mb-1" title={modelName}>AI: {modelName}</h3>
+                <div className="inline-flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-full ${stats.status === 'error' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                    <span className={`text-xs ${stats.status === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                        {stats.status.charAt(0).toUpperCase() + stats.status.slice(1)}
+                    </span>
+                </div>
             </div>
 
             {onHide && (
@@ -66,94 +59,158 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
             )}
 
             {/* Content */}
-            <div className="flex flex-col gap-4">
-                {/* Model Info */}
-                <div className="px-2 border-b border-dark-700 pb-3">
-                    <div className="text-[10px] text-dark-500 mb-1">Model</div>
-                    <div className="text-sm font-mono text-white truncate mb-1" title={modelName}>
-                        {modelName}
-                    </div>
-                    <div className="text-[10px] text-dark-500 mb-2">
-                        Context Window: <span className="text-dark-300">{ctxSize ? ctxSize.toLocaleString() : 'N/A'}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                        <div className="inline-flex items-center gap-1">
-                            <span className={`inline-block w-2 h-2 rounded-full ${stats.status === 'error' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                            <span className={`text-[10px] ${stats.status === 'error' ? 'text-red-400' : 'text-green-400'}`}>
-                                {stats.status.charAt(0).toUpperCase() + stats.status.slice(1)}
-                            </span>
-                        </div>
-                        {stats.requests_processing > 0 && (
-                            <span className="text-[10px] text-cyan-400 font-mono animate-pulse">
-                                Processing
-                            </span>
-                        )}
-                    </div>
-                </div>
+            <div className="flex flex-col gap-3">
 
                 {/* Performance Stats */}
                 <div className="px-2 border-b border-dark-700 pb-3">
                     <div className="grid grid-cols-2 gap-2">
                         {/* Avg Gen */}
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-dark-500 mb-0.5">Avg Gen</span>
+                            <span className="text-xs text-dark-500 mb-0.5">Avg Gen</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl font-bold text-accent-cyan font-mono">
                                     {smoothedTPS.toFixed(1)}
                                 </span>
-                                <span className="text-[10px] text-dark-400 font-mono">T/s</span>
+                                <span className="text-xs text-dark-400 font-mono">T/s</span>
                             </div>
                         </div>
 
                         {/* Prompt Eval */}
                         <div className="flex flex-col border-l border-dark-700 pl-2">
-                            <span className="text-[10px] text-dark-500 mb-0.5">Prompt Eval</span>
+                            <span className="text-xs text-dark-500 mb-0.5">Prompt Eval</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-xl font-bold text-white font-mono">
                                     {stats.prompt_tokens_seconds ? stats.prompt_tokens_seconds.toFixed(0) : '-'}
                                 </span>
-                                <span className="text-[10px] text-dark-400 font-mono">T/s</span>
+                                <span className="text-xs text-dark-400 font-mono">T/s</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Concurrency & Queue */}
-                <div className="px-2 border-b border-dark-700 pb-3 flex justify-between items-center text-xs">
-                    <div className="flex gap-2">
-                        <span className="text-dark-500">Slots:</span>
-                        <span className="font-mono text-dark-300">
-                            {/* Use max of slots_used and requests_processing to avoid 0/1 when processing */}
-                            {Math.max(stats.slots_used, stats.requests_processing)} <span className="text-dark-600">/</span> {stats.slots_total}
-                        </span>
-                    </div>
-                    {stats.requests_deferred > 0 && (
-                        <div className="flex gap-2 text-yellow-500 animate-pulse font-semibold">
-                            <span>Queue:</span>
-                            <span className="font-mono">{stats.requests_deferred}</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* KV Cache / Context Usage */}
+                {/* KV Cache Utilization - Stacked Segment Bar */}
                 <div className="px-2">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] text-dark-500">Context Usage</span>
-                        <span className="text-[10px] text-dark-400 font-mono">
-                            {Math.round(smoothedContextUsed).toLocaleString()} / {ctxSize ? ctxSize.toLocaleString() : 'unknown'}
-                        </span>
-                    </div>
-                    <div className="w-full bg-dark-700 rounded-full h-1.5 mb-1">
-                        <div
-                            className={`h-1.5 rounded-full transition-all duration-300 ${smoothedContextPercent > 90 ? 'bg-red-500' : 'bg-blue-500'
-                                }`}
-                            style={{ width: `${Math.min(smoothedContextPercent, 100)}%` }}
-                        />
-                    </div>
-                    <div className="text-right text-[10px] text-dark-500">
-                        {smoothedContextPercent.toFixed(1)}%
-                    </div>
+                    {(() => {
+                        // Calculate total tokens from slots using new kv_cache metrics
+                        const slots = stats.slots || [];
+
+                        // Use new kv_cache.cells_used if available, fallback to legacy tokens_cached
+                        const totalCached = slots.reduce((sum, s) => {
+                            if (s.kv_cache && s.kv_cache.cells_used > 0) {
+                                return sum + s.kv_cache.cells_used;
+                            }
+                            return sum + (s.tokens_cached || 0);
+                        }, 0);
+
+                        // With unified cache, all slots share a single context pool
+                        // Use the first slot's n_ctx (they all report the same value)
+                        const kvTotal = slots.length > 0
+                            ? (slots[0]?.n_ctx || 0)
+                            : (stats.kv_cache_tokens || stats.n_ctx || 0);
+
+                        const usagePercent = kvTotal > 0 ? (totalCached / kvTotal) * 100 : 0;
+
+                        // Slot colors for segments
+                        const slotColors = [
+                            'bg-cyan-500',
+                            'bg-purple-500',
+                            'bg-emerald-500',
+                            'bg-amber-500',
+                            'bg-rose-500',
+                            'bg-indigo-500'
+                        ];
+
+                        return (
+                            <>
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs text-dark-500">KV Cache <span className="text-dark-600">({usagePercent.toFixed(0)}%)</span></span>
+                                    <span className="text-xs text-dark-400 font-mono">
+                                        {totalCached.toLocaleString()} / {kvTotal.toLocaleString()}
+                                    </span>
+                                </div>
+
+                                {/* Stacked bar - Shows contribution to total system cache */}
+                                <div className="w-full bg-dark-700 rounded-full h-2 mb-2 overflow-hidden flex">
+                                    {slots.map((slot, idx) => {
+                                        const slotCached = slot.kv_cache?.cells_used || slot.tokens_cached || 0;
+                                        const slotPercent = kvTotal > 0
+                                            ? (slotCached / kvTotal) * 100
+                                            : 0;
+                                        if (slotPercent <= 0) return null;
+
+                                        return (
+                                            <div
+                                                key={slot.id}
+                                                className={`h-2 transition-all duration-300 ${slotColors[idx % slotColors.length]} ${slot.state !== 'idle' ? 'animate-pulse' : ''
+                                                    }`}
+                                                style={{ width: `${slotPercent}%` }}
+                                                title={`Slot ${slot.id}: ${slotCached.toLocaleString()} cells (pos ${slot.kv_cache?.pos_min ?? 'N/A'}-${slot.kv_cache?.pos_max ?? 'N/A'})`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Detailed Slot Usage Legend */}
+                                <div className="flex flex-col gap-1">
+                                    {slots.map((slot, idx) => {
+                                        const slotCached = slot.kv_cache?.cells_used || slot.tokens_cached || 0;
+
+                                        // Use new kv_cache.utilization if available, otherwise calculate
+                                        const slotUsagePercent = slot.kv_cache?.utilization
+                                            ? slot.kv_cache.utilization * 100
+                                            : (slot.n_ctx > 0 ? (slotCached / slot.n_ctx * 100) : 0);
+
+                                        // Use new performance metrics if available
+                                        const slotTPS = slot.performance?.generation_tokens_per_sec
+                                            || (slot.predicted_ms > 0 ? (slot.predicted_n / (slot.predicted_ms / 1000)) : 0);
+
+                                        const isActive = slot.state !== 'idle';
+
+                                        return (
+                                            <div
+                                                key={slot.id}
+                                                className={`flex flex-col gap-1 border-l-2 pl-2 py-1 transition-colors ${isActive ? 'border-cyan-500 bg-cyan-500/5 pulse-subtle' : 'border-dark-600'
+                                                    }`}
+                                                title={`Slot ${slot.id}: ${slotCached.toLocaleString()} cells cached. ${slotTPS.toFixed(1)} T/s. Pos: ${slot.kv_cache?.pos_min ?? 'N/A'}-${slot.kv_cache?.pos_max ?? 'N/A'}`}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`inline-block w-2 h-2 rounded-full ${slotColors[idx % slotColors.length]}`} />
+                                                            <span className="text-dark-400 font-semibold text-xs">Slot {slot.id}</span>
+                                                        </div>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded ml-0.5 mt-0.5 inline-block ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-dark-700 text-dark-500'
+                                                            }`}>
+                                                            {slot.state.toLowerCase()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="font-mono text-dark-300 text-[10px]">
+                                                        {slotCached.toLocaleString()} <span className="text-dark-500">/</span> {slot.n_ctx.toLocaleString()} <span className="text-dark-600 text-[9px]">({slotUsagePercent.toFixed(1)}%)</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[10px] font-mono pl-3 text-dark-500">
+                                                    <div>
+                                                        <span className="text-accent-cyan">{slotTPS.toFixed(1)}</span> T/s
+                                                        {slot.performance?.prompt_tokens_per_sec && (
+                                                            <span className="text-dark-600 ml-1">
+                                                                (P: {slot.performance.prompt_tokens_per_sec.toFixed(0)})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {/* TODO: Re-enable cache hit rate once we understand llama.cpp metrics */}
+                                                    {/* {hitRate !== null && (
+                                                        <div>
+                                                            Hit: <span className={(hitRate ?? 0) > 50 ? 'text-emerald-500' : 'text-dark-500'}>{hitRate.toFixed(0)}%</span>
+                                                        </div>
+                                                    )} */}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
         </div>

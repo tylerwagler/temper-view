@@ -27,8 +27,6 @@ export const GaugeChart: React.FC<GaugeChartProps> = ({
     title,
     subtitle,
     thresholds = { warning: 70, danger: 90 },
-    powerLimitW,
-    hardwareMaxW,
     showYellowZone = false,
     color: overrideColor,
     minimal = false,

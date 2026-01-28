@@ -47,6 +47,7 @@ export interface TemperGPUMetric {
 }
 
 export interface HostMetrics {
+  hostname: string;
   cpu_load_percent: number;
   memory_total_mb: number;
   memory_available_mb: number;
@@ -63,6 +64,40 @@ export interface ChassisMetrics {
   cpu_temps_c: number[];
   fans_rpm: number[];
   target_fan_percent: number;
+  psu1_current_a: number;
+  psu2_current_a: number;
+  psu1_voltage_v: number;
+  psu2_voltage_v: number;
+}
+
+export interface SlotKVCacheMetrics {
+  pos_min: number;        // -1 if empty, >= 0 if used
+  pos_max: number;        // -1 if empty, >= 0 if used
+  cells_used: number;     // 0 if empty, > 0 if used
+  utilization: number;    // 0.0-1.0 (pos_max / n_ctx)
+  cache_efficiency: number; // 0.0-1.0 (cached / total)
+}
+
+export interface SlotPerformanceMetrics {
+  prompt_tokens_per_sec: number;
+  generation_tokens_per_sec: number;
+  speculative_acceptance_rate?: number;
+  draft_tokens_total?: number;
+  draft_tokens_accepted?: number;
+}
+
+export interface SlotMetrics {
+  id: number;
+  n_ctx: number;
+  tokens_cached: number; // Legacy field for backward compatibility
+  state: string;
+  prompt_n: number;
+  prompt_ms: number;
+  predicted_n: number;
+  predicted_ms: number;
+  cache_n: number;
+  kv_cache?: SlotKVCacheMetrics;  // New per-slot KV cache metrics
+  performance?: SlotPerformanceMetrics | null; // New per-slot performance metrics
 }
 
 export interface AiServiceMetrics extends LlamaMetrics {
@@ -72,6 +107,7 @@ export interface AiServiceMetrics extends LlamaMetrics {
   n_ctx?: number;
   slots_used: number;
   slots_total: number;
+  slots?: SlotMetrics[];
 }
 
 export interface HostInfo {
