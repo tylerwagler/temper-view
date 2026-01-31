@@ -102,6 +102,7 @@ export interface SlotMetrics {
 
 export interface AiServiceMetrics extends LlamaMetrics {
   status: string;
+  load_progress: number;  // 0.0-1.0, progress during loading
   model: string;
   model_path?: string;
   n_ctx?: number;

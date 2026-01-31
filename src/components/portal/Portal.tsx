@@ -12,11 +12,16 @@ import {
     ShieldCheck,
     Cpu,
     User as UserIcon,
+    Users as UsersIcon,
     Loader2,
     MessageSquare,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Layers
 } from 'lucide-react';
+import { UserManager } from './UserManager';
+import { TierManager } from './TierManager';
+import { ChatInterface } from './ChatInterface';
 
 export const Portal = () => {
     const [session, setSession] = useState<any>(null);
@@ -24,7 +29,7 @@ export const Portal = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-    const [activeTab, setActiveTab] = useState<'keys' | 'billing' | 'settings' | 'hardware' | 'chat'>('keys');
+    const [activeTab, setActiveTab] = useState<'keys' | 'billing' | 'settings' | 'hardware' | 'chat' | 'users' | 'tiers'>('chat');
     const [error, setError] = useState<string | null>(null);
     const [profile, setProfile] = useState<any>(null);
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -35,7 +40,7 @@ export const Portal = () => {
         console.log('Fetching profile for:', userId);
         const { data, error } = await supabase
             .from('profiles')
-            .select('*')
+            .select('*, tiers(display_name)')
             .eq('id', userId)
             .single();
 
@@ -62,6 +67,13 @@ export const Portal = () => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Refresh profile when changing tabs (to pick up tier changes from User Management)
+    useEffect(() => {
+        if (session?.user && (activeTab === 'keys' || activeTab === 'settings')) {
+            fetchProfile(session.user.id);
+        }
+    }, [activeTab]);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -166,34 +178,34 @@ export const Portal = () => {
     }
 
     return (
-        <div className="min-h-screen bg-dark-950 text-white flex">
+        <div className="h-screen bg-dark-950 text-white flex overflow-hidden">
             {/* Sidebar */}
             <aside className={`${isCollapsed ? 'w-20' : 'w-64'} bg-dark-900 border-r border-dark-800 p-4 flex flex-col transition-all duration-300 ease-in-out relative group`}>
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="absolute -right-3 top-20 bg-dark-800 border border-dark-700 text-dark-400 hover:text-accent-cyan p-1 rounded-full z-20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                    className="absolute -right-3 top-20 bg-dark-800 border border-dark-700 text-dark-400 hover:text-accent-cyan p-1 rounded-full z-20 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 shadow-xl"
                 >
                     {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                 </button>
 
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} mb-10 px-2 pt-2`}>
                     <ShieldCheck className="w-6 h-6 text-accent-cyan flex-shrink-0" />
-                    {!isCollapsed && <span className="font-bold text-lg whitespace-nowrap overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">AI Portal</span>}
+                    {!isCollapsed && <span className="font-bold text-lg whitespace-nowrap overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">AI Portal v2.2</span>}
                 </div>
 
                 <nav className="flex-1 space-y-2">
-                    <TabButton
-                        active={activeTab === 'keys'}
-                        onClick={() => setActiveTab('keys')}
-                        icon={<Key size={18} />}
-                        label="API Keys"
-                        collapsed={isCollapsed}
-                    />
                     <TabButton
                         active={activeTab === 'chat'}
                         onClick={() => setActiveTab('chat')}
                         icon={<MessageSquare size={18} />}
                         label="AI Chat"
+                        collapsed={isCollapsed}
+                    />
+                    <TabButton
+                        active={activeTab === 'keys'}
+                        onClick={() => setActiveTab('keys')}
+                        icon={<Key size={18} />}
+                        label="API Keys"
                         collapsed={isCollapsed}
                     />
                     <TabButton
@@ -210,6 +222,20 @@ export const Portal = () => {
                                 onClick={() => setActiveTab('hardware')}
                                 icon={<Cpu size={18} />}
                                 label="Hardware"
+                                collapsed={isCollapsed}
+                            />
+                            <TabButton
+                                active={activeTab === 'users'}
+                                onClick={() => setActiveTab('users')}
+                                icon={<UsersIcon size={18} />}
+                                label="User Management"
+                                collapsed={isCollapsed}
+                            />
+                            <TabButton
+                                active={activeTab === 'tiers'}
+                                onClick={() => setActiveTab('tiers')}
+                                icon={<Layers size={18} />}
+                                label="Tier Management"
                                 collapsed={isCollapsed}
                             />
                         </div>
@@ -229,7 +255,7 @@ export const Portal = () => {
                             <div className="flex-1 min-w-0 animate-in fade-in slide-in-from-left-2 duration-300">
                                 <p className="text-xs font-bold truncate text-dark-300 group-hover/profile:text-white transition-colors">{profile?.display_name || session.user.email}</p>
                                 <p className="text-[10px] text-dark-500 uppercase tracking-wider font-bold">
-                                    {profile?.subscription_status === 'active' ? (profile?.plan_type || 'PRO') : 'Free'} Plan
+                                    {profile?.tiers?.display_name || 'No Tier'}
                                 </p>
                             </div>
                         )}
@@ -245,7 +271,7 @@ export const Portal = () => {
                 </div>
             </aside>
 
-            <main className={`flex-1 overflow-auto ${(activeTab === 'hardware' || activeTab === 'chat') ? 'p-0' : 'p-10'}`}>
+            <main className={`flex-1 ${(activeTab === 'hardware' || activeTab === 'chat') ? 'overflow-hidden' : 'overflow-auto'} ${(activeTab === 'hardware' || activeTab === 'chat') ? 'p-0' : 'p-10'}`}>
                 <div className={(activeTab === 'hardware' || activeTab === 'chat') ? 'w-full h-full' : 'max-w-4xl mx-auto'}>
                     {activeTab === 'keys' && <ApiKeyManager />}
                     {activeTab === 'billing' && (
@@ -263,9 +289,34 @@ export const Portal = () => {
                         />
                     )}
                     {activeTab === 'hardware' && <GPUDashboard hideHeader />}
-                    {activeTab === 'chat' && <ChatSection />}
+                    {activeTab === 'chat' && <ChatInterface />}
+                    {activeTab === 'users' && <UserManager />}
+                    {activeTab === 'tiers' && <TierManager />}
                 </div>
             </main>
+        </div>
+    );
+};
+
+const UsageBar = ({ label, used, limit }: { label: string, used: number, limit: number }) => {
+    const percentage = Math.min(Math.round((used / limit) * 100), 100);
+    const isWarning = percentage > 80;
+    const isCritical = percentage > 95;
+
+    return (
+        <div className="space-y-1.5">
+            <div className="flex justify-between items-end">
+                <span className="text-[10px] uppercase font-bold text-dark-500 tracking-wider font-mono">{label}</span>
+                <span className={`text-[10px] font-mono font-bold ${isCritical ? 'text-red-400' : isWarning ? 'text-yellow-400' : 'text-dark-400'}`}>
+                    {used.toLocaleString()} / {limit.toLocaleString()}
+                </span>
+            </div>
+            <div className="h-1 w-full bg-dark-800 rounded-full overflow-hidden border border-dark-700/50">
+                <div
+                    className={`h-full transition-all duration-500 rounded-full ${isCritical ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-accent-cyan'}`}
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
         </div>
     );
 };
@@ -298,10 +349,66 @@ const ApiKeyManager = () => {
     const [newKeyName, setNewKeyName] = useState('');
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [userTier, setUserTier] = useState<any>(null);
+    const [userUsage, setUserUsage] = useState<any>(null);
+    const [keyUsage, setKeyUsage] = useState<Record<string, number>>({});
 
     useEffect(() => {
         fetchKeys();
+        fetchUserTierAndUsage();
+        fetchKeyUsage();
     }, []);
+
+    const fetchKeyUsage = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Get per-key usage from usage_logs
+        const { data, error } = await supabase
+            .from('usage_logs')
+            .select('api_key_id, total_tokens');
+
+        if (error) {
+            console.error('Error fetching key usage:', error);
+            return;
+        }
+
+        // Aggregate by api_key_id
+        const usageMap: Record<string, number> = {};
+        if (data) {
+            data.forEach((log: any) => {
+                usageMap[log.api_key_id] = (usageMap[log.api_key_id] || 0) + (log.total_tokens || 0);
+            });
+        }
+        setKeyUsage(usageMap);
+    };
+
+    const fetchUserTierAndUsage = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch user's tier
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select('tier_id, tiers(display_name, description, hourly_limit, daily_limit, weekly_limit, monthly_limit, rate_limit_rpm, rate_limit_tpm)')
+            .eq('id', user.id)
+            .single();
+
+        if (profileData) {
+            setUserTier(profileData.tiers);
+        }
+
+        // Fetch user's aggregated usage
+        const { data: usageData } = await supabase
+            .from('user_usage')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+
+        if (usageData) {
+            setUserUsage(usageData);
+        }
+    };
 
     const fetchKeys = async () => {
         setIsLoading(true);
@@ -347,6 +454,13 @@ const ApiKeyManager = () => {
     };
 
     const deleteKey = async (id: string) => {
+        // Check if this is the WebChat key
+        const keyToDelete = keys.find(k => k.id === id);
+        if (keyToDelete?.name === 'WebChat') {
+            alert('The WebChat API key cannot be deleted. It is required for the web chat interface.');
+            return;
+        }
+
         if (!confirm('Are you sure you want to delete this API key?')) return;
 
         const { error } = await supabase
@@ -362,12 +476,226 @@ const ApiKeyManager = () => {
         }
     };
 
+    const formatLimit = (limit: number) => {
+        if (limit === -1) return 'Unlimited';
+        if (limit >= 1000000) return `${(limit / 1000000).toFixed(1)}M`;
+        if (limit >= 1000) return `${(limit / 1000).toFixed(0)}K`;
+        return limit.toString();
+    };
+
+    const getResetTime = (resetDate: string, period: 'hourly' | 'daily' | 'weekly' | 'monthly') => {
+        if (!resetDate) return 'Unknown';
+        const reset = new Date(resetDate);
+        const now = new Date();
+
+        let periodMs: number;
+        if (period === 'hourly') {
+            periodMs = 60 * 60 * 1000;
+        } else if (period === 'daily') {
+            periodMs = 24 * 60 * 60 * 1000;
+        } else if (period === 'weekly') {
+            periodMs = 7 * 24 * 60 * 60 * 1000;
+        } else {
+            periodMs = 30 * 24 * 60 * 60 * 1000;
+        }
+
+        const nextReset = new Date(reset.getTime() + periodMs);
+        const diff = nextReset.getTime() - now.getTime();
+
+        // If reset time has passed, calculate time since it should have reset
+        if (diff < 0) {
+            const overdue = Math.abs(diff);
+            const hours = Math.floor(overdue / (1000 * 60 * 60));
+            const minutes = Math.floor((overdue % (1000 * 60 * 60)) / (1000 * 60));
+
+            if (hours > 24) {
+                const days = Math.floor(hours / 24);
+                return `Overdue ${days}d`;
+            } else if (hours > 0) {
+                return `Overdue ${hours}h`;
+            } else {
+                return `Overdue ${minutes}m`;
+            }
+        }
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 24) {
+            const days = Math.floor(hours / 24);
+            return `${days}d ${hours % 24}h`;
+        }
+        return `${hours}h ${minutes}m`;
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div>
                 <h1 className="text-3xl font-bold mb-2">API Keys</h1>
                 <p className="text-dark-400">Keys for authenticating your requests to the AI stack.</p>
             </div>
+
+            {/* User Tier and Usage Summary */}
+            {userTier && userUsage && (
+                <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-white mb-1">{userTier.display_name} Tier</h3>
+                            {userTier.description && (
+                                <p className="text-sm text-dark-400">{userTier.description}</p>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 text-accent-cyan bg-accent-cyan/10 px-4 py-2 rounded-lg border border-accent-cyan/20">
+                            <Layers size={18} />
+                            <span className="text-sm font-bold">Current Plan</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-6">
+                        <div>
+                            {userTier.hourly_limit > 0 ? (
+                                <>
+                                    <UsageBar
+                                        label="Hourly"
+                                        used={userUsage.hourly_usage || 0}
+                                        limit={userTier.hourly_limit}
+                                    />
+                                    <p className="text-[9px] text-dark-500 mt-1.5 font-mono">
+                                        Resets in {getResetTime(userUsage.hourly_reset_at, 'hourly')}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-[10px] uppercase font-bold text-dark-500 tracking-wider font-mono">Hourly</span>
+                                        <span className="text-[10px] font-mono font-bold text-dark-400">
+                                            {(userUsage.hourly_usage || 0).toLocaleString()} / Unlimited
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-dark-500 font-mono">
+                                        Resets in {getResetTime(userUsage.hourly_reset_at, 'hourly')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            {userTier.daily_limit > 0 ? (
+                                <>
+                                    <UsageBar
+                                        label="Daily"
+                                        used={userUsage.daily_usage || 0}
+                                        limit={userTier.daily_limit}
+                                    />
+                                    <p className="text-[9px] text-dark-500 mt-1.5 font-mono">
+                                        Resets in {getResetTime(userUsage.daily_reset_at, 'daily')}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-[10px] uppercase font-bold text-dark-500 tracking-wider font-mono">Daily</span>
+                                        <span className="text-[10px] font-mono font-bold text-dark-400">
+                                            {(userUsage.daily_usage || 0).toLocaleString()} / Unlimited
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-dark-500 font-mono">
+                                        Resets in {getResetTime(userUsage.daily_reset_at, 'daily')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            {userTier.weekly_limit > 0 ? (
+                                <>
+                                    <UsageBar
+                                        label="Weekly"
+                                        used={userUsage.weekly_usage || 0}
+                                        limit={userTier.weekly_limit}
+                                    />
+                                    <p className="text-[9px] text-dark-500 mt-1.5 font-mono">
+                                        Resets in {getResetTime(userUsage.weekly_reset_at, 'weekly')}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-[10px] uppercase font-bold text-dark-500 tracking-wider font-mono">Weekly</span>
+                                        <span className="text-[10px] font-mono font-bold text-dark-400">
+                                            {(userUsage.weekly_usage || 0).toLocaleString()} / Unlimited
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-dark-500 font-mono">
+                                        Resets in {getResetTime(userUsage.weekly_reset_at, 'weekly')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            {userTier.monthly_limit > 0 ? (
+                                <>
+                                    <UsageBar
+                                        label="Monthly"
+                                        used={userUsage.monthly_usage || 0}
+                                        limit={userTier.monthly_limit}
+                                    />
+                                    <p className="text-[9px] text-dark-500 mt-1.5 font-mono">
+                                        Resets in {getResetTime(userUsage.monthly_reset_at, 'monthly')}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-[10px] uppercase font-bold text-dark-500 tracking-wider font-mono">Monthly</span>
+                                        <span className="text-[10px] font-mono font-bold text-dark-400">
+                                            {(userUsage.monthly_usage || 0).toLocaleString()} / Unlimited
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-dark-500 font-mono">
+                                        Resets in {getResetTime(userUsage.monthly_reset_at, 'monthly')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-6 pt-6 border-t border-dark-800/50 grid grid-cols-5 gap-4">
+                        <div>
+                            <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Total Tokens</p>
+                            <p className="text-lg font-mono text-white">{(userUsage.total_tokens || 0).toLocaleString()}</p>
+                        </div>
+                        {userTier.hourly_limit !== -1 && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Hourly Limit</p>
+                                <p className="text-sm font-mono text-dark-300">{formatLimit(userTier.hourly_limit)}</p>
+                            </div>
+                        )}
+                        {userTier.daily_limit !== -1 && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Daily Limit</p>
+                                <p className="text-sm font-mono text-dark-300">{formatLimit(userTier.daily_limit)}</p>
+                            </div>
+                        )}
+                        {userTier.weekly_limit !== -1 && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Weekly Limit</p>
+                                <p className="text-sm font-mono text-dark-300">{formatLimit(userTier.weekly_limit)}</p>
+                            </div>
+                        )}
+                        {userTier.monthly_limit !== -1 && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Monthly Limit</p>
+                                <p className="text-sm font-mono text-dark-300">{formatLimit(userTier.monthly_limit)}</p>
+                            </div>
+                        )}
+                        {userTier.rate_limit_rpm !== -1 && (
+                            <div>
+                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-1">Rate Limit</p>
+                                <p className="text-sm font-mono text-dark-300">{userTier.rate_limit_rpm} RPM</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-lg">
                 <div className="p-6 border-b border-dark-800 flex justify-between items-center bg-dark-900/50">
@@ -426,23 +754,50 @@ const ApiKeyManager = () => {
                     </div>
                 ) : (
                     <div className="divide-y divide-dark-800">
-                        {keys.map((key) => (
-                            <div key={key.id} className="p-6 flex items-center justify-between group hover:bg-dark-800/30 transition-colors">
-                                <div>
-                                    <h4 className="font-bold text-white mb-1 group-hover:text-accent-cyan transition-colors">{key.name}</h4>
-                                    <div className="flex items-center gap-3 text-[11px] text-dark-500">
-                                        <span className="font-mono bg-dark-800 px-1.5 py-0.5 rounded border border-dark-700">sk_ai_••••••••</span>
-                                        <span>Created on {new Date(key.created_at).toLocaleDateString()}</span>
+                        {keys.map((key) => {
+                            const isWebChatKey = key.name === 'WebChat';
+                            return (
+                                <div key={key.id} className="p-6 group hover:bg-dark-800/30 transition-colors">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className="font-bold text-white group-hover:text-accent-cyan transition-colors">{key.name}</h4>
+                                                {isWebChatKey && (
+                                                    <span className="bg-accent-cyan/10 text-accent-cyan text-[10px] uppercase font-bold px-2 py-0.5 rounded border border-accent-cyan/20">
+                                                        Web Chat
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-3 text-[11px] text-dark-500">
+                                                <span className="font-mono bg-dark-800 px-1.5 py-0.5 rounded border border-dark-700">sk_ai_••••••••</span>
+                                                <span>Created {new Date(key.created_at).toLocaleDateString()}</span>
+                                                {key.last_used_at && (
+                                                    <span>• Last used {new Date(key.last_used_at).toLocaleTimeString()}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right">
+                                                <p className="text-[10px] uppercase font-bold text-dark-500 mb-0.5">Key Usage</p>
+                                                <p className="text-sm font-mono text-white">{(keyUsage[key.id] || 0).toLocaleString()}</p>
+                                                <p className="text-[9px] text-dark-500">tokens</p>
+                                            </div>
+                                            {!isWebChatKey ? (
+                                                <button
+                                                    onClick={() => deleteKey(key.id)}
+                                                    className="text-dark-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                                    title="Delete key"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            ) : (
+                                                <div className="w-[42px]"></div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => deleteKey(key.id)}
-                                    className="text-dark-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -453,7 +808,7 @@ const ApiKeyManager = () => {
 const BillingSection = ({ user, profile }: any) => {
     const [isRedirecting, setIsRedirecting] = useState(false);
 
-    const handleUpgrade = async () => {
+    const handleUpgrade = async (priceId: string) => {
         setIsRedirecting(true);
         try {
             const response = await fetch('/api/billing/create-checkout-session', {
@@ -462,7 +817,7 @@ const BillingSection = ({ user, profile }: any) => {
                 body: JSON.stringify({
                     user_id: user.id,
                     user_email: user.email,
-                    price_id: 'price_123' // Replace with your actual Stripe Price ID
+                    price_id: priceId
                 })
             });
             const data = await response.json();
@@ -508,69 +863,83 @@ const BillingSection = ({ user, profile }: any) => {
                 <p className="text-dark-400">Manage your subscription and usage limits.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-                <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xs font-bold uppercase text-dark-500 mb-6 tracking-widest">Current Plan</h3>
-                    <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-4xl font-black text-white italic">
-                            {isSubscribed ? (profile?.plan_type || 'PRO').toUpperCase() : 'FREE'}
-                        </span>
-                        <span className="text-dark-500 text-sm">/ tier</span>
+            {isSubscribed ? (
+                <div className="grid grid-cols-2 gap-6">
+                    <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg">
+                        <h3 className="text-xs font-bold uppercase text-dark-500 mb-6 tracking-widest">Current Plan</h3>
+                        <div className="flex items-baseline gap-2 mb-2">
+                            <span className="text-4xl font-black text-white italic">
+                                {(profile?.tiers?.display_name || 'PRO').toUpperCase()}
+                            </span>
+                            <span className="text-dark-500 text-sm">/ tier</span>
+                        </div>
+                        <p className="text-dark-400 text-sm mb-8 leading-relaxed">
+                            Priority inference, detailed performance analytics, and unlimited model swapping enabled.
+                        </p>
+                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm font-medium text-center">
+                            Your subscription is active!
+                        </div>
                     </div>
-                    <p className="text-dark-400 text-sm mb-8 leading-relaxed">
-                        {isSubscribed
-                            ? "Priority inference, detailed performance analytics, and unlimited model swapping enabled."
-                            : "Standard access to GPU metrics and community models. Upgrade for priority inference and detailed performance analytics."
-                        }
-                    </p>
 
-                    {!isSubscribed ? (
+                    <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                            <CreditCard size={120} />
+                        </div>
+                        <h3 className="text-xs font-bold uppercase text-dark-500 mb-6 tracking-widest">Payment Method</h3>
+                        <div className="mt-4 text-center py-10">
+                            <p className="text-dark-400 text-sm mb-4">Manage your payment methods and invoices</p>
+                            <button
+                                onClick={handleManageBilling}
+                                disabled={isRedirecting}
+                                className="text-accent-cyan text-sm font-bold flex items-center gap-2 mx-auto hover:underline disabled:opacity-50"
+                            >
+                                {isRedirecting ? <Loader2 size={16} className="animate-spin" /> : 'Open Billing Portal'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-6">
+                    {/* Pro Plan */}
+                    <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg hover:border-accent-cyan/50 transition-all">
+                        <h3 className="text-xs font-bold uppercase text-dark-500 mb-4 tracking-widest">Pro Plan</h3>
+                        <div className="flex items-baseline gap-2 mb-4">
+                            <span className="text-4xl font-black text-white">PRO</span>
+                        </div>
+                        <p className="text-dark-400 text-sm mb-6 leading-relaxed">
+                            Priority inference access with enhanced performance analytics and model swapping.
+                        </p>
                         <button
-                            onClick={handleUpgrade}
+                            onClick={() => handleUpgrade('price_1Sv32rDNaJU3OXpntborxKFa')}
                             disabled={isRedirecting}
                             className="w-full bg-accent-cyan hover:bg-accent-cyan/90 text-dark-950 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
                         >
                             {isRedirecting ? <Loader2 size={18} className="animate-spin" /> : 'Upgrade to Pro'}
                         </button>
-                    ) : (
-                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm font-medium text-center">
-                            Your subscription is active!
-                        </div>
-                    )}
-                </div>
+                    </div>
 
-                <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-lg relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-                        <CreditCard size={120} />
-                    </div>
-                    <h3 className="text-xs font-bold uppercase text-dark-500 mb-6 tracking-widest">Payment Method</h3>
-                    <div className="mt-4 text-center py-10">
-                        {isSubscribed ? (
-                            <>
-                                <p className="text-dark-400 text-sm mb-4">Manage your payment methods and invoices</p>
-                                <button
-                                    onClick={handleManageBilling}
-                                    disabled={isRedirecting}
-                                    className="text-accent-cyan text-sm font-bold flex items-center gap-2 mx-auto hover:underline disabled:opacity-50"
-                                >
-                                    {isRedirecting ? <Loader2 size={16} className="animate-spin" /> : 'Open Billing Portal'}
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <p className="text-dark-500 text-sm mb-4">No credit card on file</p>
-                                <button
-                                    onClick={handleUpgrade}
-                                    className="text-accent-cyan text-sm font-bold flex items-center gap-2 mx-auto hover:underline"
-                                >
-                                    <Plus size={16} />
-                                    Add Payment Method
-                                </button>
-                            </>
-                        )}
+                    {/* Ultimate Plan */}
+                    <div className="bg-dark-900 border-2 border-accent-cyan/30 rounded-2xl p-6 shadow-lg hover:border-accent-cyan transition-all relative">
+                        <div className="absolute top-4 right-4 bg-accent-cyan text-dark-950 text-[10px] font-bold px-2 py-1 rounded uppercase">
+                            Best Value
+                        </div>
+                        <h3 className="text-xs font-bold uppercase text-dark-500 mb-4 tracking-widest">Ultimate Plan</h3>
+                        <div className="flex items-baseline gap-2 mb-4">
+                            <span className="text-4xl font-black text-accent-cyan">ULTIMATE</span>
+                        </div>
+                        <p className="text-dark-400 text-sm mb-6 leading-relaxed">
+                            Maximum performance with unlimited access, priority support, and exclusive features.
+                        </p>
+                        <button
+                            onClick={() => handleUpgrade('price_1Sv33IDNaJU3OXpn8vyU7frY')}
+                            disabled={isRedirecting}
+                            className="w-full bg-accent-cyan hover:bg-accent-cyan/90 text-dark-950 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                        >
+                            {isRedirecting ? <Loader2 size={18} className="animate-spin" /> : 'Upgrade to Ultimate'}
+                        </button>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
@@ -704,25 +1073,3 @@ const AccountSection = ({ user, profile, onUpdateProfile, isAdmin }: any) => {
     );
 };
 
-const ChatSection = () => {
-    return (
-        <div className="flex flex-col h-full bg-dark-950">
-            <div className="flex items-center justify-between px-8 py-4 border-b border-dark-800/50 bg-dark-900/50 backdrop-blur-md">
-                <div>
-                    <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                        <MessageSquare className="text-accent-cyan" size={20} />
-                        AI Chat Interface
-                    </h2>
-                </div>
-            </div>
-
-            <div className="flex-1 relative">
-                <iframe
-                    src="/chat/"
-                    className="absolute inset-0 w-full h-full border-0"
-                    title="AI Chat"
-                />
-            </div>
-        </div>
-    );
-};

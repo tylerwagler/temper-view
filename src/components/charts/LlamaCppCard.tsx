@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSmoothedValue } from '../../hooks/useSmoothedValue';
 import type { AiServiceMetrics } from '../../types/gpu';
+import { ProgressBar } from '../ProgressBar';
 
 interface LlamaCppCardProps {
     stats: AiServiceMetrics | null;
@@ -10,6 +11,8 @@ interface LlamaCppCardProps {
 export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => {
     // Use the alias from stats.model
     const modelName = stats?.model || null;
+    const isLoading = stats?.status === 'loading';
+    const loadProgress = stats?.load_progress || 0;
 
     if (!stats || !modelName) {
         return (
@@ -36,11 +39,24 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
             <div className="flex flex-col mb-2 pr-6 flex-none border-b border-dark-700 pb-3">
                 <h3 className="text-lg font-semibold text-white truncate mb-1" title={modelName}>AI: {modelName}</h3>
                 <div className="inline-flex items-center gap-1">
-                    <span className={`inline-block w-2 h-2 rounded-full ${stats.status === 'error' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                    <span className={`text-xs ${stats.status === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                    <span className={`inline-block w-2 h-2 rounded-full ${stats.status === 'error' ? 'bg-red-500' : stats.status === 'loading' ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></span>
+                    <span className={`text-xs ${stats.status === 'error' ? 'text-red-400' : stats.status === 'loading' ? 'text-yellow-400' : 'text-green-400'}`}>
                         {stats.status.charAt(0).toUpperCase() + stats.status.slice(1)}
                     </span>
                 </div>
+
+                {/* Loading Progress Bar */}
+                {isLoading && (
+                    <div className="mt-3">
+                        <ProgressBar
+                            progress={loadProgress}
+                            label="Loading Model"
+                        />
+                        <p className="text-[10px] text-dark-500 text-center mt-1.5 font-mono">
+                            This may take a minute for large context sizes
+                        </p>
+                    </div>
+                )}
             </div>
 
             {onHide && (
@@ -94,11 +110,8 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
                         // Calculate total tokens from slots using new kv_cache metrics
                         const slots = stats.slots || [];
 
-                        // Use new kv_cache.cells_used if available, fallback to legacy tokens_cached
+                        // Use tokens_cached which is calculated from pos_max
                         const totalCached = slots.reduce((sum, s) => {
-                            if (s.kv_cache && s.kv_cache.cells_used > 0) {
-                                return sum + s.kv_cache.cells_used;
-                            }
                             return sum + (s.tokens_cached || 0);
                         }, 0);
 
@@ -132,7 +145,7 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
                                 {/* Stacked bar - Shows contribution to total system cache */}
                                 <div className="w-full bg-dark-700 rounded-full h-2 mb-2 overflow-hidden flex">
                                     {slots.map((slot, idx) => {
-                                        const slotCached = slot.kv_cache?.cells_used || slot.tokens_cached || 0;
+                                        const slotCached = slot.tokens_cached || 0;
                                         const slotPercent = kvTotal > 0
                                             ? (slotCached / kvTotal) * 100
                                             : 0;
@@ -144,7 +157,7 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
                                                 className={`h-2 transition-all duration-300 ${slotColors[idx % slotColors.length]} ${slot.state !== 'idle' ? 'animate-pulse' : ''
                                                     }`}
                                                 style={{ width: `${slotPercent}%` }}
-                                                title={`Slot ${slot.id}: ${slotCached.toLocaleString()} cells (pos ${slot.kv_cache?.pos_min ?? 'N/A'}-${slot.kv_cache?.pos_max ?? 'N/A'})`}
+                                                title={`Slot ${slot.id}: ${slotCached.toLocaleString()} tokens (pos ${slot.kv_cache?.pos_min ?? 'N/A'}-${slot.kv_cache?.pos_max ?? 'N/A'})`}
                                             />
                                         );
                                     })}
@@ -153,7 +166,7 @@ export const LlamaCppCard: React.FC<LlamaCppCardProps> = ({ stats, onHide }) => 
                                 {/* Detailed Slot Usage Legend */}
                                 <div className="flex flex-col gap-1">
                                     {slots.map((slot, idx) => {
-                                        const slotCached = slot.kv_cache?.cells_used || slot.tokens_cached || 0;
+                                        const slotCached = slot.tokens_cached || 0;
 
                                         // Use new kv_cache.utilization if available, otherwise calculate
                                         const slotUsagePercent = slot.kv_cache?.utilization
