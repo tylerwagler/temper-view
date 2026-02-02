@@ -11,9 +11,11 @@ import { Settings, ShieldCheck, ShieldAlert } from 'lucide-react';
 interface GPUDashboardProps {
   onOpenSettings?: () => void;
   hideHeader?: boolean;
+  isAdmin?: boolean;
+  session?: any;
 }
 
-export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hideHeader = false }) => {
+export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hideHeader = false, isAdmin = false, session }) => {
   const [selectedGPU, setSelectedGPU] = useState<any>(null);
   const [hiddenGPUMetrics, setHiddenGPUMetrics] = useState<Set<number>>(new Set());
   const [hiddenHostMetrics, setHiddenHostMetrics] = useState<Set<string>>(new Set());
@@ -41,7 +43,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
     setHiddenLlama(show === undefined ? !hiddenLlama : !show);
   };
 
-  const { data: stats, isLoading, error } = useQuery({
+  const { data: stats, isLoading, error, isFetched } = useQuery({
     queryKey: ['gpu-stats', 'all'],
     queryFn: () => fetchGPUStats(),
     refetchInterval: 100,
@@ -75,7 +77,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
     [hostsData]
   );
 
-  const showNoData = !isLoading && gpus.length === 0 && hostsData.length === 0;
+  const showNoData = !isLoading && isFetched && gpus.length === 0 && hostsData.length === 0;
 
   return (
     <div className={`min-h-screen bg-dark-900 text-white font-sans ${hideHeader ? 'bg-transparent' : ''}`}>
@@ -184,6 +186,8 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                           <LlamaCppCard
                             stats={h.ai_service}
                             onHide={() => toggleLlamaVisibility(false)}
+                            isAdmin={isAdmin}
+                            session={session}
                           />
                         )}
                       </div>
