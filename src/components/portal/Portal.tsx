@@ -288,7 +288,9 @@ export const Portal = () => {
                             onUpdateProfile={() => fetchProfile(session.user.id)}
                         />
                     )}
-                    {activeTab === 'hardware' && <GPUDashboard hideHeader />}
+                    {activeTab === 'hardware' && (
+                        <GPUDashboard hideHeader isAdmin={isAdmin} session={session} />
+                    )}
                     {activeTab === 'chat' && <ChatInterface />}
                     {activeTab === 'users' && <UserManager />}
                     {activeTab === 'tiers' && <TierManager />}
@@ -769,7 +771,9 @@ const ApiKeyManager = () => {
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-3 text-[11px] text-dark-500">
-                                                <span className="font-mono bg-dark-800 px-1.5 py-0.5 rounded border border-dark-700">sk_ai_••••••••</span>
+                                                <span className="font-mono bg-dark-800 px-1.5 py-0.5 rounded border border-dark-700">
+                                                    {key.api_key.substring(0, 6)}••••{key.api_key.slice(-4)}
+                                                </span>
                                                 <span>Created {new Date(key.created_at).toLocaleDateString()}</span>
                                                 {key.last_used_at && (
                                                     <span>• Last used {new Date(key.last_used_at).toLocaleTimeString()}</span>
