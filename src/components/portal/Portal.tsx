@@ -190,7 +190,7 @@ export const Portal = () => {
 
                 <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} mb-10 px-2 pt-2`}>
                     <ShieldCheck className="w-6 h-6 text-accent-cyan flex-shrink-0" />
-                    {!isCollapsed && <span className="font-bold text-lg whitespace-nowrap overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">AI Portal v2.2</span>}
+                    {!isCollapsed && <span className="font-bold text-lg whitespace-nowrap overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">AI Portal v0.1a</span>}
                 </div>
 
                 <nav className="flex-1 space-y-2">
