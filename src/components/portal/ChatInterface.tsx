@@ -43,6 +43,7 @@ export const ChatInterface = () => {
     const [webChatKey, setWebChatKey] = useState<string>('');
     const [model, setModel] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
     const [modelStatus, setModelStatus] = useState<ModelStatus>('checking');
     const [modelInfo, setModelInfo] = useState<string>('');
@@ -350,6 +351,9 @@ export const ChatInterface = () => {
 
         setMessages(prev => [...prev, userMessage]);
         setInput('');
+
+        // Refocus input after sending
+        setTimeout(() => inputRef.current?.focus(), 0);
         setIsLoading(true);
         setError(null);
 
@@ -767,6 +771,7 @@ export const ChatInterface = () => {
 
                 <div className="flex gap-3">
                     <textarea
+                        ref={inputRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyPress}
