@@ -520,6 +520,13 @@ export const ChatInterface = () => {
                                     </>
                                 )}
                             </div>
+                            {modelInfo && modelStatus === 'loaded' && (
+                                <span className="text-[10px] text-dark-400">
+                                    • {modelInfo.includes('Nemotron') ? 'Nemotron 3 Nano' :
+                                       modelInfo.includes('GLM') ? 'GLM 4.7 Flash' :
+                                       modelInfo.split('_')[1]?.split('-').slice(0, 3).join('-') || 'Unknown Model'}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
