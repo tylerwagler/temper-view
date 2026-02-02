@@ -42,7 +42,6 @@ export const ChatInterface = () => {
     const [error, setError] = useState<string | null>(null);
     const [webChatKey, setWebChatKey] = useState<string>('');
     const [model, setModel] = useState('');
-    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
     const [modelStatus, setModelStatus] = useState<ModelStatus>('checking');
@@ -69,49 +68,8 @@ export const ChatInterface = () => {
         });
     };
 
-    const loadModel = async (modelId: string) => {
-        if (!webChatKey) {
-            console.error('WebChat API key not available');
-            return;
-        }
-
-        console.log(`Triggering load for model: ${modelId}`);
-
-        // Optimistically set status to loading
-        setModelStatus('loading');
-        setModelInfo(`${modelId} (loading...)`);
-
-        try {
-            // Send a minimal request to trigger model loading
-            const response = await fetch('/llama/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${webChatKey}`
-                },
-                body: JSON.stringify({
-                    model: modelId,
-                    messages: [{ role: 'user', content: 'Hi' }],
-                    stream: false,
-                    max_tokens: 1
-                })
-            });
-
-            if (response.ok) {
-                console.log(`Model ${modelId} load triggered successfully`);
-                // Refresh model status after a short delay
-                setTimeout(() => checkModelStatus(), 2000);
-            } else {
-                console.error(`Failed to trigger model load: ${response.status}`);
-                // Check status again to get actual state
-                checkModelStatus();
-            }
-        } catch (err: any) {
-            console.error(`Error triggering model load: ${err.message}`);
-            // Check status again to get actual state
-            checkModelStatus();
-        }
-    };
+    // Model loading is now handled via the Hardware tab
+    // const loadModel = async (modelId: string) => { ... };
 
     const fetchSessions = async () => {
         const { data, error } = await supabase
@@ -283,12 +241,14 @@ export const ChatInterface = () => {
             if (response.ok) {
                 const data = await response.json();
                 if (data.data && data.data.length > 0) {
-                    // Store all available models
-                    setAvailableModels(data.data);
+                    // Available models (not storing in state anymore)
 
                     // Find the currently loaded model
+                    // llama.cpp returns models without status field when they're loaded
                     const loadedModel = data.data.find((m: ModelInfo) =>
-                        m.status?.value === 'loaded' || m.status?.value === 'ready'
+                        m.status?.value === 'loaded' ||
+                        m.status?.value === 'ready' ||
+                        !m.status  // No status field means loaded in llama.cpp
                     );
 
                     // Auto-select loaded model if none selected
@@ -303,7 +263,8 @@ export const ChatInterface = () => {
                     const selectedModelInfo = model
                         ? data.data.find((m: ModelInfo) => m.id === model)
                         : (loadedModel || data.data[0]);
-                    const status = selectedModelInfo?.status?.value || 'unknown';
+                    // llama.cpp doesn't return status field - if model is in the list, it's loaded
+                    const status = selectedModelInfo?.status?.value || 'loaded';
 
                     if (status === 'loaded' || status === 'ready') {
                         setModelStatus('loaded');
@@ -533,28 +494,6 @@ export const ChatInterface = () => {
                             AI Chat Interface
                         </h2>
                         <div className="flex items-center gap-3">
-                            <select
-                                value={model}
-                                onChange={(e) => {
-                                    const newModel = e.target.value;
-                                    setModel(newModel);
-                                    // Trigger model load if it's different from current
-                                    if (newModel !== model) {
-                                        loadModel(newModel);
-                                    }
-                                }}
-                                className="text-xs bg-dark-800 border border-dark-700 rounded px-2 py-1 text-accent-cyan font-medium focus:outline-none focus:border-accent-cyan transition-colors hover:bg-dark-700 cursor-pointer"
-                            >
-                                {availableModels.length === 0 ? (
-                                    <option value="">Loading models...</option>
-                                ) : (
-                                    availableModels.map((m) => (
-                                        <option key={m.id} value={m.id}>
-                                            {m.id}
-                                        </option>
-                                    ))
-                                )}
-                            </select>
                             <div className="flex items-center gap-1.5" title={modelInfo}>
                                 {modelStatus === 'loaded' && (
                                     <>
