@@ -37,7 +37,6 @@ export const Portal = () => {
     const isAdmin = profile?.role === 'admin';
 
     const fetchProfile = async (userId: string) => {
-        console.log('Fetching profile for:', userId);
         const { data, error } = await supabase
             .from('profiles')
             .select('*, tiers(display_name)')
@@ -48,7 +47,6 @@ export const Portal = () => {
             console.error('Error fetching profile:', error);
             setError(`Profile load failed: ${error.message}`);
         } else if (data) {
-            console.log('Profile loaded:', data);
             setProfile(data);
         }
     };
@@ -87,7 +85,7 @@ export const Portal = () => {
             } else {
                 const { error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
-                alert('Check your email for the confirmation link!');
+                setError('Check your email for the confirmation link!');
             }
         } catch (err: any) {
             setError(err.message);
@@ -354,6 +352,7 @@ const ApiKeyManager = () => {
     const [userTier, setUserTier] = useState<any>(null);
     const [userUsage, setUserUsage] = useState<any>(null);
     const [keyUsage, setKeyUsage] = useState<Record<string, number>>({});
+    const [keyError, setKeyError] = useState<string | null>(null);
 
     useEffect(() => {
         fetchKeys();
@@ -430,7 +429,9 @@ const ApiKeyManager = () => {
     const createKey = async () => {
         if (!newKeyName.trim()) return;
 
-        const key = `sk_ai_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+        const bytes = new Uint8Array(24);
+        crypto.getRandomValues(bytes);
+        const key = `sk_ai_${Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')}`;
 
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -447,7 +448,7 @@ const ApiKeyManager = () => {
 
         if (error) {
             console.error('Error creating key:', error);
-            alert('Failed to create API key');
+            setKeyError('Failed to create API key');
         } else {
             setGeneratedKey(key);
             setNewKeyName('');
@@ -459,7 +460,7 @@ const ApiKeyManager = () => {
         // Check if this is the WebChat key
         const keyToDelete = keys.find(k => k.id === id);
         if (keyToDelete?.name === 'WebChat') {
-            alert('The WebChat API key cannot be deleted. It is required for the web chat interface.');
+            setKeyError('The WebChat API key cannot be deleted. It is required for the web chat interface.');
             return;
         }
 
@@ -472,7 +473,7 @@ const ApiKeyManager = () => {
 
         if (error) {
             console.error('Error deleting key:', error);
-            alert('Failed to delete API key');
+            setKeyError('Failed to delete API key');
         } else {
             fetchKeys();
         }
@@ -536,6 +537,13 @@ const ApiKeyManager = () => {
                 <h1 className="text-3xl font-bold mb-2">API Keys</h1>
                 <p className="text-dark-400">Keys for authenticating your requests to the AI stack.</p>
             </div>
+
+            {keyError && (
+                <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 flex justify-between items-center">
+                    <span>{keyError}</span>
+                    <button onClick={() => setKeyError(null)} className="text-red-400 hover:text-red-200 ml-4">&times;</button>
+                </div>
+            )}
 
             {/* User Tier and Usage Summary */}
             {userTier && userUsage && (
@@ -811,6 +819,7 @@ const ApiKeyManager = () => {
 
 const BillingSection = ({ user, profile }: any) => {
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [billingError, setBillingError] = useState<string | null>(null);
 
     const handleUpgrade = async (priceId: string) => {
         setIsRedirecting(true);
@@ -832,7 +841,7 @@ const BillingSection = ({ user, profile }: any) => {
             }
         } catch (err: any) {
             console.error('Upgrade error:', err);
-            alert(`Billing Error: ${err.message}`);
+            setBillingError('A billing error occurred. Please try again.');
             setIsRedirecting(false);
         }
     };
@@ -853,7 +862,7 @@ const BillingSection = ({ user, profile }: any) => {
             }
         } catch (err: any) {
             console.error('Portal error:', err);
-            alert(`Billing Error: ${err.message}`);
+            setBillingError('A billing error occurred. Please try again.');
             setIsRedirecting(false);
         }
     };
@@ -866,6 +875,13 @@ const BillingSection = ({ user, profile }: any) => {
                 <h1 className="text-3xl font-bold mb-2">Billing & Plan</h1>
                 <p className="text-dark-400">Manage your subscription and usage limits.</p>
             </div>
+
+            {billingError && (
+                <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 flex justify-between items-center">
+                    <span>{billingError}</span>
+                    <button onClick={() => setBillingError(null)} className="text-red-400 hover:text-red-200 ml-4">&times;</button>
+                </div>
+            )}
 
             {isSubscribed ? (
                 <div className="grid grid-cols-2 gap-6">

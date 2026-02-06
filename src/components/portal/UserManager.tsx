@@ -45,7 +45,9 @@ export const UserManager = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
     const [logsLoading, setLogsLoading] = useState(false);
+    const [logsError, setLogsError] = useState<string | null>(null);
     const [tiers, setTiers] = useState<any[]>([]);
+    const [userMessage, setUserMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         fetchUsers();
@@ -105,7 +107,7 @@ export const UserManager = () => {
             setUsers(usersWithUsage);
         } catch (error: any) {
             console.error('Error fetching users:', error);
-            alert('Failed to load users: ' + error.message);
+            setUserMessage({ type: 'error', text: 'Failed to load users' });
         } finally {
             setLoading(false);
         }
@@ -113,17 +115,37 @@ export const UserManager = () => {
 
     const fetchUsageLogs = async () => {
         setLogsLoading(true);
+        setLogsError(null);
         try {
-            const { data, error } = await supabase
+            // Fetch usage logs
+            const { data: logsData, error: logsError } = await supabase
                 .from('usage_logs')
-                .select('*, profiles(display_name)')
+                .select('*')
                 .order('created_at', { ascending: false })
                 .limit(50);
 
-            if (error) throw error;
-            setUsageLogs(data || []);
+            if (logsError) throw logsError;
+
+            // Fetch all unique user profiles
+            const userIds = [...new Set(logsData?.map(log => log.user_id) || [])];
+            const { data: profilesData, error: profilesError } = await supabase
+                .from('profiles')
+                .select('id, display_name')
+                .in('id', userIds);
+
+            if (profilesError) throw profilesError;
+
+            // Map profiles to logs
+            const profileMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+            const enrichedLogs = logsData?.map(log => ({
+                ...log,
+                profiles: profileMap.get(log.user_id)
+            })) || [];
+
+            setUsageLogs(enrichedLogs);
         } catch (error: any) {
             console.error('Error fetching usage logs:', error);
+            setLogsError(error.message || 'Failed to load usage logs');
         } finally {
             setLogsLoading(false);
         }
@@ -149,10 +171,10 @@ export const UserManager = () => {
 
             setEditingUser(null);
             fetchUsers();
-            alert('User updated successfully');
+            setUserMessage({ type: 'success', text: 'User updated successfully' });
         } catch (error: any) {
             console.error('Error updating user:', error);
-            alert('Failed to update user: ' + error.message);
+            setUserMessage({ type: 'error', text: 'Failed to update user' });
         } finally {
             setIsSaving(false);
         }
@@ -170,10 +192,10 @@ export const UserManager = () => {
             if (error) throw error;
 
             fetchUsers();
-            alert('User profile deleted successfully');
+            setUserMessage({ type: 'success', text: 'User profile deleted successfully' });
         } catch (error: any) {
             console.error('Error deleting user:', error);
-            alert('Failed to delete user: ' + error.message);
+            setUserMessage({ type: 'error', text: 'Failed to delete user' });
         }
     };
 
@@ -185,6 +207,13 @@ export const UserManager = () => {
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {userMessage && (
+                <div className={`${userMessage.type === 'error' ? 'bg-red-900/30 border-red-700 text-red-300' : 'bg-green-900/30 border-green-700 text-green-300'} border rounded-xl p-4 flex justify-between items-center`}>
+                    <span>{userMessage.text}</span>
+                    <button onClick={() => setUserMessage(null)} className="ml-4 hover:opacity-70">&times;</button>
+                </div>
+            )}
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold mb-2">User Management</h1>
@@ -424,6 +453,11 @@ export const UserManager = () => {
                         <div className="p-10 text-center text-dark-500">
                             <Loader2 className="mx-auto mb-4 animate-spin opacity-20" size={32} />
                             <p className="text-sm font-medium">Loading activity logs...</p>
+                        </div>
+                    ) : logsError ? (
+                        <div className="p-10 text-center">
+                            <p className="text-sm font-medium text-red-400 mb-2">Error loading usage logs</p>
+                            <p className="text-xs text-dark-500">{logsError}</p>
                         </div>
                     ) : usageLogs.length === 0 ? (
                         <div className="p-10 text-center text-dark-500">

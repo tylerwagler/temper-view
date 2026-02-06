@@ -8,6 +8,7 @@ export const TierManager = () => {
     const [editingTier, setEditingTier] = useState<string | null>(null);
     const [editForm, setEditForm] = useState<any>({});
     const [isCreating, setIsCreating] = useState(false);
+    const [tierError, setTierError] = useState<string | null>(null);
     const [newTier, setNewTier] = useState({
         name: '',
         display_name: '',
@@ -70,7 +71,7 @@ export const TierManager = () => {
 
         if (error) {
             console.error('Error updating tier:', error);
-            alert('Failed to update tier');
+            setTierError('Failed to update tier');
         } else {
             setEditingTier(null);
             setEditForm({});
@@ -80,7 +81,7 @@ export const TierManager = () => {
 
     const createTier = async () => {
         if (!newTier.name || !newTier.display_name) {
-            alert('Name and display name are required');
+            setTierError('Name and display name are required');
             return;
         }
 
@@ -90,7 +91,7 @@ export const TierManager = () => {
 
         if (error) {
             console.error('Error creating tier:', error);
-            alert('Failed to create tier');
+            setTierError('Failed to create tier');
         } else {
             setIsCreating(false);
             setNewTier({
@@ -119,7 +120,7 @@ export const TierManager = () => {
 
         if (error) {
             console.error('Error deleting tier:', error);
-            alert('Failed to delete tier');
+            setTierError('Failed to delete tier');
         } else {
             fetchTiers();
         }
@@ -138,6 +139,13 @@ export const TierManager = () => {
                 <h1 className="text-3xl font-bold mb-2">Tier Management</h1>
                 <p className="text-dark-400">Configure usage tiers and limits for your users.</p>
             </div>
+
+            {tierError && (
+                <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 flex justify-between items-center">
+                    <span>{tierError}</span>
+                    <button onClick={() => setTierError(null)} className="text-red-400 hover:text-red-200 ml-4">&times;</button>
+                </div>
+            )}
 
             <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-lg">
                 <div className="p-6 border-b border-dark-800 flex justify-between items-center bg-dark-900/50">

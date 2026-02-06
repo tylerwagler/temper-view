@@ -46,7 +46,11 @@ export async function fetchGPUStats(): Promise<GPUStats> {
       // Replace non-compliant numeric values with null
       const safeJson = rawText.replace(/: ?(inf|-inf|nan)/gi, ': null');
 
-      return { host, data: JSON.parse(safeJson) };
+      try {
+        return { host, data: JSON.parse(safeJson) };
+      } catch {
+        throw new Error(`Invalid JSON response from ${host}`);
+      }
     })
   );
 
