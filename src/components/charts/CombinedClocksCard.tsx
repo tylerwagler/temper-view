@@ -194,6 +194,7 @@ export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, 
                     </div>
                 </div>
             </div>
+
         </div>
     );
 };

@@ -32,6 +32,15 @@ export interface TemperGPUMetric {
     gen: number;
     width: number;
   };
+  nvlink?: {
+    active: boolean;
+    throughput_supported: boolean;
+    link_count: number;
+    version: number;
+    speed_mbps: number;
+    tx_throughput_kbs: number;
+    rx_throughput_kbs: number;
+  };
   ecc: {
     volatile_single: number;
     volatile_double: number;
@@ -54,20 +63,6 @@ export interface HostMetrics {
   load_avg_1m: number;
   load_avg_5m: number;
   uptime_seconds: number;
-}
-
-export interface ChassisMetrics {
-  ipmi_available: boolean;
-  inlet_temp_c: number;
-  exhaust_temp_c: number;
-  power_consumption_w: number;
-  cpu_temps_c: number[];
-  fans_rpm: number[];
-  target_fan_percent: number;
-  psu1_current_a: number;
-  psu2_current_a: number;
-  psu1_voltage_v: number;
-  psu2_voltage_v: number;
 }
 
 export interface SlotKVCacheMetrics {
@@ -114,7 +109,6 @@ export interface AiServiceMetrics extends LlamaMetrics {
 export interface HostInfo {
   host: string;
   host_metrics: HostMetrics;
-  chassis_metrics: ChassisMetrics;
   ai_service?: AiServiceMetrics;
 }
 

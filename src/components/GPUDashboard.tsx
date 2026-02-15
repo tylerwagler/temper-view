@@ -46,7 +46,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
   const { data: stats, isLoading, error, isFetched } = useQuery({
     queryKey: ['gpu-stats', 'all'],
     queryFn: () => fetchGPUStats(),
-    refetchInterval: 100,
+    refetchInterval: 1000, // Changed from 100ms to 1000ms (1 second)
     staleTime: 0,
     retry: 0,
     retryDelay: 1000,
@@ -56,15 +56,26 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
 
   useEffect(() => {
     if (stats?.gpus && stats.gpus.length > 0) {
-      lastValidDataRef.current = {
-        gpus: stats.gpus,
-        hosts: stats.hosts || []
-      };
+      // Only update if data actually changed
+      const gpusChanged = lastValidDataRef.current.gpus !== stats.gpus;
+      const hostsChanged = lastValidDataRef.current.hosts !== (stats.hosts || []);
+
+      if (gpusChanged || hostsChanged) {
+        lastValidDataRef.current = {
+          gpus: stats.gpus,
+          hosts: stats.hosts || []
+        };
+      }
     } else if (stats?.hosts && stats.hosts.length > 0) {
-      lastValidDataRef.current = {
-        gpus: stats.gpus || [],
-        hosts: stats.hosts
-      };
+      // Only update if data actually changed
+      const hostsChanged = lastValidDataRef.current.hosts !== stats.hosts;
+
+      if (hostsChanged) {
+        lastValidDataRef.current = {
+          gpus: stats.gpus || [],
+          hosts: stats.hosts
+        };
+      }
     }
   }, [stats]);
 
@@ -73,7 +84,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
   const HARDWARE_MAX_W = 230;
 
   const isSystemHealty = useMemo(
-    () => hostsData.length > 0 && hostsData.every(h => h?.chassis_metrics?.ipmi_available === true),
+    () => hostsData.length > 0,
     [hostsData]
   );
 
@@ -177,7 +188,6 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                           <HostMetricsCard
                             host={h.host}
                             metrics={h.host_metrics}
-                            chassis={h.chassis_metrics}
                             onHide={() => toggleHostMetricsVisibility(h.host, false)}
                           />
                         )}
@@ -211,6 +221,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                               clocks={g.clocks}
                               pState={g.p_state}
                               pcie={g.pcie}
+                              nvlink={g.nvlink}
                               gpuName={g.name ?? 'GPU'}
                               gpuLabel={g.host ? `${g.host.replace(/https?:\/\//, '').split(':')[0]}: GPU${g.index}` : `GPU ${g.index}`}
                               onHide={() => toggleGPUMetricsVisibility(g.index, false)}

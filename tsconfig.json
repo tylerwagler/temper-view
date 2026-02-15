@@ -21,7 +21,13 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+
+    /* Path Mappings */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["src"]
 }

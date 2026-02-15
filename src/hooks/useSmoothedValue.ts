@@ -12,8 +12,12 @@ export function useSmoothedValue(value: number, duration: number = 300): number 
     const targetValueRef = useRef(value);
     const startTimeRef = useRef<number | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+    const mountedRef = useRef(true);
 
     useEffect(() => {
+        // Mark as mounted when component mounts
+        mountedRef.current = true;
+
         // If target hasn't changed, do nothing
         if (value === targetValueRef.current) return;
 
@@ -23,6 +27,9 @@ export function useSmoothedValue(value: number, duration: number = 300): number 
         startTimeRef.current = null;
 
         const animate = (timestamp: number) => {
+            // Check if component is still mounted before continuing
+            if (!mountedRef.current) return;
+
             if (!startTimeRef.current) startTimeRef.current = timestamp;
 
             const elapsed = timestamp - startTimeRef.current;
@@ -32,9 +39,13 @@ export function useSmoothedValue(value: number, duration: number = 300): number 
             const easeOut = 1 - Math.pow(1 - progress, 3);
 
             const nextValue = startValueRef.current + (targetValueRef.current - startValueRef.current) * easeOut;
-            setCurrentValue(nextValue);
 
-            if (progress < 1) {
+            // Only update state if component is still mounted
+            if (mountedRef.current) {
+                setCurrentValue(nextValue);
+            }
+
+            if (progress < 1 && mountedRef.current) {
                 animationFrameRef.current = requestAnimationFrame(animate);
             } else {
                 startTimeRef.current = null;
@@ -48,6 +59,9 @@ export function useSmoothedValue(value: number, duration: number = 300): number 
         animationFrameRef.current = requestAnimationFrame(animate);
 
         return () => {
+            // Mark component as unmounted
+            mountedRef.current = false;
+            // Cancel any pending animation
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }

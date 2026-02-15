@@ -364,50 +364,101 @@ const ApiKeyManager = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Get per-key usage from usage_logs
-        const { data, error } = await supabase
-            .from('usage_logs')
-            .select('api_key_id, total_tokens');
+        try {
+            // Get per-key usage from usage_logs
+            const { data, error } = await supabase
+                .from('usage_logs')
+                .select('api_key_id, total_tokens');
 
-        if (error) {
-            console.error('Error fetching key usage:', error);
-            return;
-        }
+            if (error) {
+                console.warn('Key usage fetch warning:', error);
+                setKeyUsage({}); // Set empty map on error
+                return;
+            }
 
-        // Aggregate by api_key_id
-        const usageMap: Record<string, number> = {};
-        if (data) {
-            data.forEach((log: any) => {
-                usageMap[log.api_key_id] = (usageMap[log.api_key_id] || 0) + (log.total_tokens || 0);
-            });
+            // Aggregate by api_key_id
+            const usageMap: Record<string, number> = {};
+            if (Array.isArray(data)) {
+                data.forEach((log: any) => {
+                    if (log.api_key_id) {
+                        usageMap[log.api_key_id] = (usageMap[log.api_key_id] || 0) + (log.total_tokens || 0);
+                    }
+                });
+            }
+            setKeyUsage(usageMap);
+        } catch (err) {
+            console.error('Error fetching key usage:', err);
+            setKeyUsage({});
         }
-        setKeyUsage(usageMap);
     };
 
     const fetchUserTierAndUsage = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Fetch user's tier
-        const { data: profileData } = await supabase
-            .from('profiles')
-            .select('tier_id, tiers(display_name, description, hourly_limit, daily_limit, weekly_limit, monthly_limit, rate_limit_rpm, rate_limit_tpm)')
-            .eq('id', user.id)
-            .single();
-
-        if (profileData) {
-            setUserTier(profileData.tiers);
+        if (!user) {
+            console.warn('No authenticated user found');
+            return;
         }
 
-        // Fetch user's aggregated usage
-        const { data: usageData } = await supabase
-            .from('user_usage')
-            .select('*')
-            .eq('user_id', user.id)
-            .single();
+        console.log('Fetching profile for user:', user.id);
 
-        if (usageData) {
-            setUserUsage(usageData);
+        try {
+            // Fetch user's tier
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, display_name, tier_id, tiers(display_name, description, hourly_limit, daily_limit, weekly_limit, monthly_limit, rate_limit_rpm, rate_limit_tpm)')
+                .eq('id', user.id)
+                .single();
+
+            console.log('Profile query result:', { profileData, profileError, userId: user.id });
+
+            if (profileError) {
+                console.warn('Profile fetch error:', profileError);
+                // Set a default tier if profile doesn't exist
+                setUserTier({
+                    display_name: 'Free',
+                    description: 'Default tier',
+                    hourly_limit: -1,
+                    daily_limit: -1,
+                    weekly_limit: -1,
+                    monthly_limit: -1,
+                    rate_limit_rpm: 60,
+                    rate_limit_tpm: 90000
+                });
+            } else if (profileData?.tiers) {
+                setUserTier(profileData.tiers);
+            }
+        } catch (err) {
+            console.error('Error fetching tier:', err);
+        }
+
+        try {
+            // Fetch user's aggregated usage
+            const { data: usageData, error: usageError } = await supabase
+                .from('user_usage')
+                .select('*')
+                .eq('user_id', user.id)
+                .single();
+
+            if (usageError) {
+                console.warn('Usage fetch warning:', usageError);
+                // Set default usage if none exists
+                setUserUsage({
+                    user_id: user.id,
+                    hourly_usage: 0,
+                    daily_usage: 0,
+                    weekly_usage: 0,
+                    monthly_usage: 0,
+                    total_tokens: 0,
+                    hourly_reset_at: new Date().toISOString(),
+                    daily_reset_at: new Date().toISOString(),
+                    weekly_reset_at: new Date().toISOString(),
+                    monthly_reset_at: new Date().toISOString()
+                });
+            } else if (usageData) {
+                setUserUsage(usageData);
+            }
+        } catch (err) {
+            console.error('Error fetching usage:', err);
         }
     };
 
@@ -420,8 +471,9 @@ const ApiKeyManager = () => {
 
         if (error) {
             console.error('Error fetching keys:', error);
+            setKeys([]); // Ensure keys is always an array
         } else {
-            setKeys(data || []);
+            setKeys(Array.isArray(data) ? data : []); // Defensive: ensure it's an array
         }
         setIsLoading(false);
     };
@@ -757,14 +809,14 @@ const ApiKeyManager = () => {
                         <Loader2 className="mx-auto mb-4 animate-spin opacity-20" size={48} />
                         <p className="text-sm font-medium">Loading your API keys...</p>
                     </div>
-                ) : keys.length === 0 ? (
+                ) : !Array.isArray(keys) || keys.length === 0 ? (
                     <div className="p-12 text-center text-dark-500">
                         <Key size={48} className="mx-auto mb-4 opacity-20" />
                         <p className="text-sm font-medium">No API keys yet. Create one to get started.</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-dark-800">
-                        {keys.map((key) => {
+                        {Array.isArray(keys) && keys.map((key) => {
                             const isWebChatKey = key.name === 'WebChat';
                             return (
                                 <div key={key.id} className="p-6 group hover:bg-dark-800/30 transition-colors">

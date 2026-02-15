@@ -19,8 +19,8 @@ const getApiHosts = (): string[] => {
   const env = import.meta.env.VITE_GPU_API_BASE;
   if (env) return [env];
 
-  // Default to relative path /api for reverse proxy setup
-  return ['/api'];
+  // Default to both local (via nginx proxy) and Sparky (direct)
+  return ['/api', 'http://10.20.10.10:3001'];
 };
 
 /**
@@ -65,7 +65,6 @@ export async function fetchGPUStats(): Promise<GPUStats> {
       aggregatedHosts.push({
         host,
         host_metrics: data.host || {},
-        chassis_metrics: data.chassis || { ipmi_available: false },
         ai_service: data.ai_service
       });
 

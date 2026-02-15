@@ -33,6 +33,15 @@ interface CombinedGPUCardProps {
         gen: number;
         width: number;
     };
+    nvlink?: {
+        active: boolean;
+        throughput_supported: boolean;
+        link_count: number;
+        version: number;
+        speed_mbps: number;
+        tx_throughput_kbs: number;
+        rx_throughput_kbs: number;
+    };
 
     gpuName: string;
     gpuLabel: string;
@@ -49,6 +58,14 @@ export const CombinedGPUCard: React.FC<CombinedGPUCardProps> = (props) => {
                     <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-accent-cyan border border-dark-600 cursor-help" title={`Performance State: ${props.pState.description}`}>
                         P{props.pState.id}
                     </span>
+                    {props.nvlink?.active && (
+                        <span
+                            className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-emerald-400 border border-dark-600 cursor-help"
+                            title={`NVLink v${props.nvlink.version} | ${props.nvlink.link_count} link${props.nvlink.link_count > 1 ? 's' : ''} | Max: ${(props.nvlink.speed_mbps * props.nvlink.link_count / 1024).toFixed(1)} GB/s`}
+                        >
+                            NVLink
+                        </span>
+                    )}
                 </div>
             </div>
 
