@@ -1,4 +1,4 @@
-import type { TemperGPUMetric, GPUStats } from '../types/gpu';
+import type { TemperGPUMetric, GPUStats, AiServiceMetrics } from '../types/gpu';
 
 const getApiHosts = (): string[] => {
   // Check localStorage for the configured hosts
@@ -19,9 +19,34 @@ const getApiHosts = (): string[] => {
   const env = import.meta.env.VITE_GPU_API_BASE;
   if (env) return [env];
 
-  // Default to both local (via nginx proxy) and Sparky (direct)
-  return ['/api', 'http://10.20.10.10:3001'];
+  // Default to both local (via nginx proxy) and Sparky (via nginx proxy)
+  return ['/api', '/api/sparky'];
 };
+
+interface BackendStatus extends AiServiceMetrics {
+  host: string;
+  backend: string;
+  is_local: boolean;
+}
+
+interface ServiceStatusResponse {
+  backends: BackendStatus[];
+}
+
+/**
+ * Fetch AI service status from ai-proxy's /service/status endpoint.
+ * Returns per-backend status for all configured LLM backends.
+ */
+async function fetchServiceStatus(): Promise<BackendStatus[]> {
+  try {
+    const res = await fetch('/api/service/status');
+    if (!res.ok) return [];
+    const data: ServiceStatusResponse = await res.json();
+    return data.backends || [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Fetch GPU statistics from Temper API(s)
@@ -35,37 +60,66 @@ export async function fetchGPUStats(): Promise<GPUStats> {
     throw new Error('NO_HOSTS_CONFIGURED');
   }
 
-  const results = await Promise.allSettled(
-    hosts.map(async (host) => {
-      const url = `${host.replace(/\/$/, '')}/metrics`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // Fetch GPU/host metrics and service status in parallel
+  const [metricsResults, backends] = await Promise.all([
+    Promise.allSettled(
+      hosts.map(async (host) => {
+        const url = `${host.replace(/\/$/, '')}/metrics`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // Temporary fix for backend returning invalid JSON (inf/nan)
-      const rawText = await res.text();
-      // Replace non-compliant numeric values with null
-      const safeJson = rawText.replace(/: ?(inf|-inf|nan)/gi, ': null');
+        // Temporary fix for backend returning invalid JSON (inf/nan)
+        const rawText = await res.text();
+        // Replace non-compliant numeric values with null
+        const safeJson = rawText.replace(/: ?(inf|-inf|nan)/gi, ': null');
 
-      try {
-        return { host, data: JSON.parse(safeJson) };
-      } catch {
-        throw new Error(`Invalid JSON response from ${host}`);
-      }
-    })
-  );
+        try {
+          return { host, data: JSON.parse(safeJson) };
+        } catch {
+          throw new Error(`Invalid JSON response from ${host}`);
+        }
+      })
+    ),
+    fetchServiceStatus(),
+  ]);
 
   const aggregatedGpus: any[] = [];
   const aggregatedHosts: any[] = [];
 
-  results.forEach(result => {
+  metricsResults.forEach(result => {
     if (result.status === 'fulfilled') {
       const { host, data } = result.value;
 
-      // Collect host-level metrics - always add host, even with partial data
+      // Determine if this host represents the local machine
+      const isLocalHost = host === '/api' || host.includes('localhost') || host.includes('127.0.0.1');
+
+      // Find matching backend from service status (prefer ready over offline)
+      const candidateBackends = backends.filter(b =>
+        isLocalHost ? b.is_local : !b.is_local
+      );
+      const matchedBackend =
+        candidateBackends.find(b => b.status === 'ready') ||
+        candidateBackends.find(b => b.status === 'loading') ||
+        candidateBackends[0];
+
+      // Build ai_service from matched backend (or fall back to inline ai_service for compat)
+      let ai_service: AiServiceMetrics | undefined;
+      if (matchedBackend) {
+        ai_service = matchedBackend;
+      } else if (data.ai_service) {
+        // Legacy fallback: host-metrics still returning ai_service (shouldn't happen after upgrade)
+        const ai = data.ai_service;
+        ai_service = {
+          ...ai,
+          model: ai.model || ai.modelName || '',
+          model_path: ai.model_path || ai.modelPath || '',
+        };
+      }
+
       aggregatedHosts.push({
         host,
         host_metrics: data.host || {},
-        ai_service: data.ai_service
+        ai_service,
       });
 
       if (data.gpus && Array.isArray(data.gpus)) {

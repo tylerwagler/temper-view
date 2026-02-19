@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Send, Loader2, AlertCircle, Zap, User, Bot, Activity, ChevronDown, ChevronRight, Brain, CheckCircle, XCircle, Clock, Save, FolderOpen, Plus, Trash2 } from 'lucide-react';
 
@@ -26,13 +26,12 @@ interface ChatSession {
     updated_at: string;
 }
 
-interface ModelInfo {
+interface ChatModel {
     id: string;
-    object: string;
-    owned_by: string;
-    status?: {
-        value: string;
-    };
+    alias: string;
+    backend: string;
+    host: string;
+    is_local: boolean;
 }
 
 export const ChatInterface = () => {
@@ -50,6 +49,9 @@ export const ChatInterface = () => {
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const [showSessions, setShowSessions] = useState(false);
+    const [availableModels, setAvailableModels] = useState<ChatModel[]>([]);
+    const [showModelPicker, setShowModelPicker] = useState(false);
+    const modelPickerRef = useRef<HTMLDivElement>(null);
     const [metrics, setMetrics] = useState<ChatMetrics>({
         totalTokens: 0,
         promptTokens: 0,
@@ -185,26 +187,6 @@ export const ChatInterface = () => {
         }
     };
 
-    useEffect(() => {
-        fetchApiKeys();
-        fetchSessions();
-    }, []);
-
-    useEffect(() => {
-        // Check status when WebChat key is loaded or model changes
-        if (webChatKey) {
-            checkModelStatus();
-
-            // Poll model status every 10 seconds
-            const interval = setInterval(checkModelStatus, 10000);
-            return () => clearInterval(interval);
-        }
-    }, [webChatKey, model]);
-
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
     const fetchApiKeys = async () => {
         const { data, error } = await supabase
             .from('api_keys')
@@ -222,85 +204,65 @@ export const ChatInterface = () => {
         }
     };
 
-    const checkModelStatus = async () => {
+    const fetchChatModels = useCallback(async () => {
         try {
-            if (!webChatKey) {
-                setModelStatus('unknown');
-                setModelInfo('No API key available');
+            const res = await fetch('/api/model/chat-models');
+            if (!res.ok) {
+                setModelStatus('error');
+                setModelInfo('Server unavailable');
+                return;
+            }
+            const models: ChatModel[] = await res.json();
+            setAvailableModels(models);
+
+            if (models.length === 0) {
+                setModelStatus('error');
+                setModelInfo('No models ready');
                 return;
             }
 
-            // Try to fetch model info from llama-server via proxy
-            const response = await fetch('/llama/v1/models', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${webChatKey}`
-                }
-            });
+            setModelStatus('loaded');
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.data && data.data.length > 0) {
-                    // Available models (not storing in state anymore)
-
-                    // Find the currently loaded model
-                    // llama.cpp returns models without status field when they're loaded
-                    const loadedModel = data.data.find((m: ModelInfo) =>
-                        m.status?.value === 'loaded' ||
-                        m.status?.value === 'ready' ||
-                        !m.status  // No status field means loaded in llama.cpp
-                    );
-
-                    // Auto-select loaded model if none selected
-                    if (!model && loadedModel) {
-                        setModel(loadedModel.id);
-                    } else if (!model && data.data.length > 0) {
-                        // Fallback to first model if no model is loaded
-                        setModel(data.data[0].id);
-                    }
-
-                    // Find the status of the selected model (or loaded model)
-                    const selectedModelInfo = model
-                        ? data.data.find((m: ModelInfo) => m.id === model)
-                        : (loadedModel || data.data[0]);
-                    // llama.cpp doesn't return status field - if model is in the list, it's loaded
-                    const status = selectedModelInfo?.status?.value || 'loaded';
-
-                    if (status === 'loaded' || status === 'ready') {
-                        setModelStatus('loaded');
-                        setModelInfo(selectedModelInfo.id);
-                    } else if (status === 'loading') {
-                        setModelStatus('loading');
-                        setModelInfo(`${selectedModelInfo.id} (loading...)`);
-                    } else if (status === 'unloaded') {
-                        // Unloaded models are ready to be loaded, not errors
-                        setModelStatus('checking');
-                        setModelInfo(`${selectedModelInfo.id} (ready to load)`);
-                    } else {
-                        setModelStatus('checking');
-                        setModelInfo(selectedModelInfo?.id || 'unknown');
-                    }
-                } else {
-                    setModelStatus('loading');
-                    setModelInfo('No models loaded');
-                }
-            } else if (response.status === 503) {
-                setModelStatus('loading');
-                setModelInfo('Model loading...');
-            } else if (response.status === 401) {
-                setModelStatus('error');
-                setModelInfo('Invalid API key');
+            // Auto-select first model if none selected or current selection went offline
+            if (!model || !models.find(m => m.id === model)) {
+                setModel(models[0].id);
+                setModelInfo(models[0].alias);
             } else {
-                setModelStatus('error');
-                setModelInfo('Server unavailable');
+                const selected = models.find(m => m.id === model);
+                if (selected) setModelInfo(selected.alias);
             }
-        } catch (err) {
+        } catch {
             setModelStatus('error');
             setModelInfo('Cannot connect to server');
-            console.error('Model status check failed:', err);
         }
-    };
+    }, [model]);
+
+    useEffect(() => {
+        fetchApiKeys();
+        fetchSessions();
+    }, []);
+
+    useEffect(() => {
+        fetchChatModels();
+        const interval = setInterval(fetchChatModels, 10000);
+        return () => clearInterval(interval);
+    }, [fetchChatModels]);
+
+    // Close model picker on outside click
+    useEffect(() => {
+        if (!showModelPicker) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+                setShowModelPicker(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showModelPicker]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     const parseThinkingTags = (content: string): { content: string; thinking?: string; isThinkingComplete?: boolean } => {
         // Check for complete thinking blocks first
@@ -494,42 +456,53 @@ export const ChatInterface = () => {
                         <Bot className="text-accent-cyan" size={20} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                            AI Chat Interface
+                        <h2 className="text-lg font-bold text-white tracking-tight">
+                            AI Chat
                         </h2>
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5" title={modelInfo}>
-                                {modelStatus === 'loaded' && (
-                                    <>
-                                        <CheckCircle size={12} className="text-green-400" />
-                                        <span className="text-[10px] text-green-400 font-medium">Ready</span>
-                                    </>
-                                )}
-                                {modelStatus === 'loading' && (
-                                    <>
-                                        <Loader2 size={12} className="text-yellow-400 animate-spin" />
-                                        <span className="text-[10px] text-yellow-400 font-medium">Loading</span>
-                                    </>
-                                )}
-                                {modelStatus === 'checking' && (
-                                    <>
-                                        <Clock size={12} className="text-dark-500 animate-pulse" />
-                                        <span className="text-[10px] text-dark-500 font-medium">Checking</span>
-                                    </>
-                                )}
-                                {modelStatus === 'error' && (
-                                    <>
-                                        <XCircle size={12} className="text-red-400" />
-                                        <span className="text-[10px] text-red-400 font-medium" title={modelInfo}>Unavailable</span>
-                                    </>
-                                )}
-                            </div>
-                            {modelInfo && modelStatus === 'loaded' && (
-                                <span className="text-[10px] text-dark-400">
-                                    • {modelInfo.includes('Nemotron') ? 'Nemotron 3 Nano' :
-                                       modelInfo.includes('GLM') ? 'GLM 4.7 Flash' :
-                                       modelInfo.split('_')[1]?.split('-').slice(0, 3).join('-') || 'Unknown Model'}
+                        <div ref={modelPickerRef} className="relative mt-1">
+                            <button
+                                onClick={() => setShowModelPicker(!showModelPicker)}
+                                className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-dark-800/50 border border-dark-700/50 hover:border-accent-cyan/30 transition-colors"
+                            >
+                                {modelStatus === 'loaded' && <CheckCircle size={12} className="text-green-400 flex-shrink-0" />}
+                                {modelStatus === 'loading' && <Loader2 size={12} className="text-yellow-400 animate-spin flex-shrink-0" />}
+                                {modelStatus === 'checking' && <Clock size={12} className="text-dark-500 animate-pulse flex-shrink-0" />}
+                                {modelStatus === 'error' && <XCircle size={12} className="text-red-400 flex-shrink-0" />}
+                                {(modelStatus === 'unknown') && <Clock size={12} className="text-dark-500 flex-shrink-0" />}
+                                <span className="text-xs text-white font-medium truncate max-w-48">
+                                    {modelInfo || 'Select Model'}
                                 </span>
+                                <ChevronDown size={12} className={`text-dark-400 flex-shrink-0 transition-transform ${showModelPicker ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {showModelPicker && (
+                                <div className="absolute top-full left-0 mt-1 w-72 bg-dark-900 border border-dark-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                    {availableModels.length === 0 ? (
+                                        <div className="px-4 py-3 text-sm text-dark-500">No models ready</div>
+                                    ) : (
+                                        availableModels.map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => {
+                                                    setModel(m.id);
+                                                    setModelInfo(m.alias);
+                                                    setShowModelPicker(false);
+                                                }}
+                                                className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-dark-800/50 transition-colors text-left ${
+                                                    model === m.id ? 'bg-accent-cyan/10' : ''
+                                                }`}
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-white truncate">{m.alias}</div>
+                                                    <div className="text-[10px] text-dark-500">
+                                                        {m.is_local ? 'Ellie' : 'Sparky'} · {m.backend === 'llama' ? 'llama.cpp' : 'vLLM'}
+                                                    </div>
+                                                </div>
+                                                {model === m.id && <CheckCircle size={14} className="text-accent-cyan flex-shrink-0" />}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -775,14 +748,14 @@ export const ChatInterface = () => {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyPress}
-                        placeholder={webChatKey ? "Type your message..." : "Loading..."}
-                        disabled={isLoading || !webChatKey}
+                        placeholder={!webChatKey ? "Loading..." : !model ? "Select a model to start chatting..." : "Type your message..."}
+                        disabled={isLoading || !webChatKey || !model}
                         className="flex-1 bg-dark-950 border border-dark-800 rounded-xl px-4 py-3 text-white placeholder-dark-500 focus:outline-none focus:border-accent-cyan transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                         rows={3}
                     />
                     <button
                         onClick={sendMessage}
-                        disabled={isLoading || !input.trim() || !webChatKey}
+                        disabled={isLoading || !input.trim() || !webChatKey || !model}
                         className="px-6 bg-accent-cyan hover:bg-accent-cyan/90 disabled:opacity-50 disabled:cursor-not-allowed text-dark-950 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-accent-cyan/20"
                     >
                         {isLoading ? (

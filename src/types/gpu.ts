@@ -12,6 +12,7 @@ export interface TemperGPUMetric {
   target_fan_percent: number;
   power_usage_mw: number; // milliwatts
   power_limit_mw: number;
+  power_max_mw: number;
   resources: {
     gpu_load_percent: number;
     memory_load_percent: number;
@@ -63,6 +64,8 @@ export interface HostMetrics {
   load_avg_1m: number;
   load_avg_5m: number;
   uptime_seconds: number;
+  fan_rpm?: number;
+  cpu_temp_celsius?: number;
 }
 
 export interface SlotKVCacheMetrics {

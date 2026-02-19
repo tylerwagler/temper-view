@@ -17,11 +17,14 @@ import {
     MessageSquare,
     ChevronLeft,
     ChevronRight,
-    Layers
+    Layers,
+    Server,
+    Terminal,
 } from 'lucide-react';
 import { UserManager } from './UserManager';
 import { TierManager } from './TierManager';
 import { ChatInterface } from './ChatInterface';
+import { ModelManager } from '../ModelManager';
 
 export const Portal = () => {
     const [session, setSession] = useState<any>(null);
@@ -29,7 +32,7 @@ export const Portal = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-    const [activeTab, setActiveTab] = useState<'keys' | 'billing' | 'settings' | 'hardware' | 'chat' | 'users' | 'tiers'>('chat');
+    const [activeTab, setActiveTab] = useState<'keys' | 'billing' | 'settings' | 'hardware' | 'chat' | 'users' | 'tiers' | 'sparky'>('chat');
     const [error, setError] = useState<string | null>(null);
     const [profile, setProfile] = useState<any>(null);
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -236,6 +239,13 @@ export const Portal = () => {
                                 label="Tier Management"
                                 collapsed={isCollapsed}
                             />
+                            <TabButton
+                                active={activeTab === 'sparky'}
+                                onClick={() => setActiveTab('sparky')}
+                                icon={<Server size={18} />}
+                                label="Models"
+                                collapsed={isCollapsed}
+                            />
                         </div>
                     )}
                 </nav>
@@ -269,8 +279,8 @@ export const Portal = () => {
                 </div>
             </aside>
 
-            <main className={`flex-1 ${(activeTab === 'hardware' || activeTab === 'chat') ? 'overflow-hidden' : 'overflow-auto'} ${(activeTab === 'hardware' || activeTab === 'chat') ? 'p-0' : 'p-10'}`}>
-                <div className={(activeTab === 'hardware' || activeTab === 'chat') ? 'w-full h-full' : 'max-w-4xl mx-auto'}>
+            <main className={`flex-1 ${(activeTab === 'hardware' || activeTab === 'chat') ? 'overflow-hidden' : 'overflow-auto'} ${(activeTab === 'hardware' || activeTab === 'chat' || activeTab === 'sparky') ? 'p-0' : 'p-10'}`}>
+                <div className={(activeTab === 'hardware' || activeTab === 'chat' || activeTab === 'sparky') ? 'w-full h-full' : 'max-w-4xl mx-auto'}>
                     {activeTab === 'keys' && <ApiKeyManager />}
                     {activeTab === 'billing' && (
                         <BillingSection
@@ -292,6 +302,7 @@ export const Portal = () => {
                     {activeTab === 'chat' && <ChatInterface />}
                     {activeTab === 'users' && <UserManager />}
                     {activeTab === 'tiers' && <TierManager />}
+                    {activeTab === 'sparky' && <ModelManager session={session} />}
                 </div>
             </main>
         </div>
@@ -864,6 +875,60 @@ const ApiKeyManager = () => {
                         })}
                     </div>
                 )}
+            </div>
+
+            {/* Claude Code Setup Instructions */}
+            <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-lg">
+                <div className="p-6 border-b border-dark-800 bg-dark-900/50">
+                    <h3 className="font-bold text-sm uppercase text-dark-500 tracking-wider flex items-center gap-2">
+                        <Terminal size={16} className="text-accent-cyan" />
+                        Use with Claude Code
+                    </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p className="text-dark-400 text-sm">
+                        Run Claude Code against this AI stack instead of Anthropic's API. Install the <span className="text-white font-medium">claude-local</span> wrapper with a single command:
+                    </p>
+
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-[10px] uppercase font-bold text-dark-500 tracking-wider mb-1.5">Linux / macOS</p>
+                            <div className="flex gap-2">
+                                <code className="flex-1 bg-dark-950 border border-dark-700 rounded-lg px-4 py-2.5 font-mono text-xs text-accent-cyan select-all block overflow-x-auto">
+                                    curl -fsSL {window.location.origin}/install/setup.sh | bash
+                                </code>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(`curl -fsSL ${window.location.origin}/install/setup.sh | bash`)}
+                                    className="bg-dark-800 hover:bg-dark-700 text-dark-400 hover:text-white rounded-lg px-3 transition-colors flex-shrink-0"
+                                    title="Copy to clipboard"
+                                >
+                                    <Copy size={14} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <p className="text-[10px] uppercase font-bold text-dark-500 tracking-wider mb-1.5">Windows (PowerShell)</p>
+                            <div className="flex gap-2">
+                                <code className="flex-1 bg-dark-950 border border-dark-700 rounded-lg px-4 py-2.5 font-mono text-xs text-accent-cyan select-all block overflow-x-auto">
+                                    irm {window.location.origin}/install/setup.ps1 | iex
+                                </code>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(`irm ${window.location.origin}/install/setup.ps1 | iex`)}
+                                    className="bg-dark-800 hover:bg-dark-700 text-dark-400 hover:text-white rounded-lg px-3 transition-colors flex-shrink-0"
+                                    title="Copy to clipboard"
+                                >
+                                    <Copy size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p className="text-dark-500 text-xs pt-2">
+                        After install, run <code className="text-dark-300 bg-dark-800 px-1.5 py-0.5 rounded">claude-local --login</code> to authenticate with your email and password.
+                        Your API key from above will be used automatically.
+                    </p>
+                </div>
             </div>
         </div>
     );

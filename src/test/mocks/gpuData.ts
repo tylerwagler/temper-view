@@ -14,6 +14,7 @@ export const mockGPU: TemperGPUMetric = {
   target_fan_percent: 70,
   power_usage_mw: 350000,
   power_limit_mw: 450000,
+  power_max_mw: 450000,
   resources: {
     gpu_load_percent: 75,
     memory_load_percent: 60,

@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchGPUStats } from '../api/gpuApi';
+import { getAvailableModels } from '../api/modelApi';
 
 import { GPUDetailsModal } from './GPUDetailsModal';
 import { CombinedGPUCard } from './charts/CombinedGPUCard';
 import { HostMetricsCard } from './charts/HostMetricsCard';
-import { LlamaCppCard } from './charts/LlamaCppCard';
 import { Settings, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface GPUDashboardProps {
@@ -15,11 +15,10 @@ interface GPUDashboardProps {
   session?: any;
 }
 
-export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hideHeader = false, isAdmin = false, session }) => {
+export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hideHeader = false, isAdmin = false }) => {
   const [selectedGPU, setSelectedGPU] = useState<any>(null);
   const [hiddenGPUMetrics, setHiddenGPUMetrics] = useState<Set<number>>(new Set());
   const [hiddenHostMetrics, setHiddenHostMetrics] = useState<Set<string>>(new Set());
-  const [hiddenLlama, setHiddenLlama] = useState(false);
 
   const lastValidDataRef = useRef<{ gpus: any[]; hosts: any[] }>({ gpus: [], hosts: [] });
 
@@ -39,24 +38,23 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
     setHiddenHostMetrics(newHidden);
   };
 
-  const toggleLlamaVisibility = (show?: boolean) => {
-    setHiddenLlama(show === undefined ? !hiddenLlama : !show);
-  };
-
   const { data: stats, isLoading, error, isFetched } = useQuery({
     queryKey: ['gpu-stats', 'all'],
     queryFn: () => fetchGPUStats(),
-    refetchInterval: 1000, // Changed from 100ms to 1000ms (1 second)
+    refetchInterval: 1000,
     staleTime: 0,
     retry: 0,
     retryDelay: 1000,
   });
 
-
+  const { data: availableModels } = useQuery({
+    queryKey: ['available-models'],
+    queryFn: getAvailableModels,
+    enabled: isAdmin,
+  });
 
   useEffect(() => {
     if (stats?.gpus && stats.gpus.length > 0) {
-      // Only update if data actually changed
       const gpusChanged = lastValidDataRef.current.gpus !== stats.gpus;
       const hostsChanged = lastValidDataRef.current.hosts !== (stats.hosts || []);
 
@@ -67,7 +65,6 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
         };
       }
     } else if (stats?.hosts && stats.hosts.length > 0) {
-      // Only update if data actually changed
       const hostsChanged = lastValidDataRef.current.hosts !== stats.hosts;
 
       if (hostsChanged) {
@@ -81,7 +78,6 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
 
   const gpus = lastValidDataRef.current.gpus;
   const hostsData = lastValidDataRef.current.hosts;
-  const HARDWARE_MAX_W = 230;
 
   const isSystemHealty = useMemo(
     () => hostsData.length > 0,
@@ -189,15 +185,8 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                             host={h.host}
                             metrics={h.host_metrics}
                             onHide={() => toggleHostMetricsVisibility(h.host, false)}
-                          />
-                        )}
-
-                        {!hiddenLlama && h.ai_service && (
-                          <LlamaCppCard
-                            stats={h.ai_service}
-                            onHide={() => toggleLlamaVisibility(false)}
-                            isAdmin={isAdmin}
-                            session={session}
+                            aiService={h.ai_service}
+                            availableModels={availableModels}
                           />
                         )}
                       </div>
@@ -206,7 +195,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                         if (hiddenGPUMetrics.has(g.index)) return null;
 
                         return (
-                          <div key={g.uniqueId || g.index} className="flex-1">
+                          <div key={g.uniqueId || g.index} className="flex-1 max-w-[calc(50%-0.375rem)]">
                             <CombinedGPUCard
                               gpuLoadPercent={g.resources?.gpu_load_percent ?? 0}
                               memoryLoadPercent={g.resources?.memory_load_percent ?? 0}
@@ -217,7 +206,7 @@ export const GPUDashboard: React.FC<GPUDashboardProps> = ({ onOpenSettings, hide
                               targetFanPercent={g.target_fan_percent ?? 0}
                               powerUsageW={Math.round((g.power_usage_mw ?? 0) * 0.001)}
                               powerLimitW={Math.round((g.power_limit_mw ?? 0) * 0.001)}
-                              hardwareMaxW={HARDWARE_MAX_W}
+                              hardwareMaxW={Math.round((g.power_max_mw ?? g.power_limit_mw ?? 0) * 0.001)}
                               clocks={g.clocks}
                               pState={g.p_state}
                               pcie={g.pcie}

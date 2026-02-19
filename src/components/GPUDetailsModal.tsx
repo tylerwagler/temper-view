@@ -87,15 +87,21 @@ export const GPUDetailsModal: React.FC<GPUDetailsModalProps> = ({
                             <div className="bg-dark-900/50 p-3 rounded-lg border border-dark-700/50">
                                 <span className="block text-xs text-dark-500 mb-1">Performance State</span>
                                 <span className="font-mono text-white text-sm flex items-center gap-2">
-                                    P{gpu.p_state.id}
-                                    <span className="text-[10px] bg-dark-700 px-1.5 rounded text-dark-300">
-                                        ({gpu.p_state.description})
-                                    </span>
+                                    {gpu.p_state.id >= 0 ? (
+                                        <>
+                                            P{gpu.p_state.id}
+                                            <span className="text-[10px] bg-dark-700 px-1.5 rounded text-dark-300">
+                                                ({gpu.p_state.description})
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="text-dark-500">N/A</span>
+                                    )}
                                 </span>
                             </div>
                             <div className="bg-dark-900/50 p-3 rounded-lg border border-dark-700/50">
                                 <span className="block text-xs text-dark-500 mb-1">Bus ID</span>
-                                <span className="font-mono text-white text-sm">{gpu.index} (PCIe)</span>
+                                <span className="font-mono text-white text-sm">{gpu.index}{gpu.pcie?.gen > 0 ? ' (PCIe)' : ''}</span>
                             </div>
                         </div>
                     </div>

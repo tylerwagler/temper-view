@@ -14,6 +14,7 @@ interface CombinedGaugesCardProps {
     powerLimitW: number;
     hardwareMaxW: number;
     gpuLabel: string;
+    hasPcie?: boolean;
     onHide?: () => void;
 }
 
@@ -65,7 +66,8 @@ const ThermalGauge: React.FC<{
     temperature: number;
     fanSpeedPercent: number;
     targetFanPercent: number;
-}> = ({ temperature, fanSpeedPercent, targetFanPercent }) => {
+    hasPcie?: boolean;
+}> = ({ temperature, fanSpeedPercent, targetFanPercent, hasPcie = true }) => {
     const smoothedTemp = useSmoothedValue(temperature, 500);
     const smoothedFan = useSmoothedValue(fanSpeedPercent, 500);
     const maxTemp = 100;
@@ -198,19 +200,21 @@ const ThermalGauge: React.FC<{
                 </text>
             </svg>
 
-            {/* Fan Speed */}
-            <div className="mt-1 w-full max-w-[200px]">
-                <div className="flex justify-between items-center text-xs mb-1">
-                    <span className="text-dark-600">Fan: {Math.round(smoothedFan)}%</span>
-                    <span className="text-dark-600">Target: {targetFanPercent}%</span>
+            {/* Fan Speed — hidden for SoC GPUs (no discrete fan) */}
+            {hasPcie && (
+                <div className="mt-1 w-full max-w-[200px]">
+                    <div className="flex justify-between items-center text-xs mb-1">
+                        <span className="text-dark-600">Fan: {Math.round(smoothedFan)}%</span>
+                        <span className="text-dark-600">Target: {targetFanPercent}%</span>
+                    </div>
+                    <div className="w-full bg-dark-700 rounded-full h-1.5 mb-1">
+                        <div className={`h-1.5 rounded-full transition-all duration-300 ${smoothedFan >= 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${smoothedFan}%` }} />
+                    </div>
+                    <div className="text-right text-[10px] text-dark-500">
+                        ~{Math.round((smoothedFan / 100) * 3000)} RPM
+                    </div>
                 </div>
-                <div className="w-full bg-dark-700 rounded-full h-1.5 mb-1">
-                    <div className={`h-1.5 rounded-full transition-all duration-300 ${smoothedFan >= 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${smoothedFan}%` }} />
-                </div>
-                <div className="text-right text-[10px] text-dark-500">
-                    ~{Math.round((smoothedFan / 100) * 3000)} RPM
-                </div>
-            </div>
+            )}
         </div>
     );
 };
@@ -218,6 +222,7 @@ const ThermalGauge: React.FC<{
 export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => {
     // Smooth the power limit to prevent jumpy gauge zones
     const smoothedPowerLimitW = useSmoothedValue(props.powerLimitW, 2000);
+    const hasPcie = props.hasPcie ?? true;
 
     return (
         <div>
@@ -238,7 +243,7 @@ export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => 
 
                 {/* Row 1, Col 2: Power (Top Right) */}
                 <div className="flex justify-center items-center border-b border-dark-700 p-1 md:border-l-0">
-                    {(() => {
+                    {props.hardwareMaxW > 0 ? (() => {
                         // Calculate dynamic thresholds
                         // Red Zone: PLimit to PMax (100%)
                         // Yellow Zone: PLimit - 0.5 * (PMax - PLimit) to PLimit
@@ -246,7 +251,7 @@ export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => 
                         let thresholds = { warning: 70, danger: 90 }; // fallback
                         let showZones = false;
 
-                        if (smoothedPowerLimitW && props.hardwareMaxW && props.hardwareMaxW > 0) {
+                        if (smoothedPowerLimitW && props.hardwareMaxW > 0) {
                             const pLimit = smoothedPowerLimitW;
                             const pMax = props.hardwareMaxW;
 
@@ -276,16 +281,29 @@ export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => 
                                 minimal={true}
                             />
                         );
-                    })()}
+                    })() : (
+                        <div className="flex flex-col items-center justify-center h-full">
+                            <span className="text-3xl font-bold text-white">{props.powerUsageW}</span>
+                            <span className="text-sm text-dark-400">W</span>
+                            <span className="text-xs text-dark-600 uppercase tracking-wider mt-1">Power</span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Row 2, Col 1: Memory (Bottom Left) */}
+                {/* Row 2, Col 1: Memory (Bottom Left) — hidden for SoC GPUs */}
                 <div className="flex justify-center items-center border-r border-dark-700 p-1">
-                    <MemoryGaugeWithVRAM
-                        loadPercent={props.memoryLoadPercent}
-                        usedMB={props.memoryUsedMB}
-                        totalMB={props.memoryTotalMB}
-                    />
+                    {hasPcie ? (
+                        <MemoryGaugeWithVRAM
+                            loadPercent={props.memoryLoadPercent}
+                            usedMB={props.memoryUsedMB}
+                            totalMB={props.memoryTotalMB}
+                        />
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-dark-500 text-sm">
+                            <span className="text-dark-600 text-xs uppercase tracking-wider mb-1">Memory</span>
+                            <span>N/A (SoC)</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Row 2, Col 2: Thermals (Bottom Right) */}
@@ -294,6 +312,7 @@ export const CombinedGaugesCard: React.FC<CombinedGaugesCardProps> = (props) => 
                         temperature={props.temperature}
                         fanSpeedPercent={props.fanSpeedPercent}
                         targetFanPercent={props.targetFanPercent}
+                        hasPcie={hasPcie}
                     />
                 </div>
             </div>

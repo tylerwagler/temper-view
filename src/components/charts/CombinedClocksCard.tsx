@@ -54,10 +54,12 @@ interface CombinedClocksCardProps {
         width: number;
     };
     gpuLabel: string;
+    hasPcie?: boolean;
     onHide?: () => void;
 }
 
-export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, pcie }) => {
+export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, pcie, hasPcie: hasPcieProp }) => {
+    const hasPcie = hasPcieProp ?? true;
     const smoothedTx = useSmoothedValue(pcie.tx_throughput_kbs, 500);
     const smoothedRx = useSmoothedValue(pcie.rx_throughput_kbs, 500);
 
@@ -114,86 +116,96 @@ export const CombinedClocksCard: React.FC<CombinedClocksCardProps> = ({ clocks, 
     return (
         <div>
             {/* Clocks Section */}
-            <div className="mb-3 pb-3 border-b border-dark-700">
+            <div className={hasPcie ? "mb-3 pb-3 border-b border-dark-700" : ""}>
                 <div className="grid grid-cols-1 gap-1">
-                    <ClockBar
-                        label="Graphics"
-                        freq={clocks.graphics}
-                        maxFreq={clocks.max_graphics}
-                        color="bg-purple-500"
-                    />
-                    <ClockBar
-                        label="Memory"
-                        freq={clocks.memory}
-                        maxFreq={clocks.max_memory}
-                        color="bg-blue-500"
-                    />
-                    <ClockBar
-                        label="Video"
-                        freq={clocks.video}
-                        maxFreq={clocks.max_video}
-                        color="bg-pink-500"
-                    />
-                    <ClockBar
-                        label="Streaming Multiprocessor"
-                        freq={clocks.sm}
-                        maxFreq={clocks.max_sm}
-                        color="bg-orange-500"
-                    />
+                    {(clocks.graphics > 0 || clocks.max_graphics > 0) && (
+                        <ClockBar
+                            label="Graphics"
+                            freq={clocks.graphics}
+                            maxFreq={clocks.max_graphics}
+                            color="bg-purple-500"
+                        />
+                    )}
+                    {(clocks.memory > 0 || clocks.max_memory > 0) && (
+                        <ClockBar
+                            label="Memory"
+                            freq={clocks.memory}
+                            maxFreq={clocks.max_memory}
+                            color="bg-blue-500"
+                        />
+                    )}
+                    {(clocks.video > 0 || clocks.max_video > 0) && (
+                        <ClockBar
+                            label="Video"
+                            freq={clocks.video}
+                            maxFreq={clocks.max_video}
+                            color="bg-pink-500"
+                        />
+                    )}
+                    {(clocks.sm > 0 || clocks.max_sm > 0) && (
+                        <ClockBar
+                            label="Streaming Multiprocessor"
+                            freq={clocks.sm}
+                            maxFreq={clocks.max_sm}
+                            color="bg-orange-500"
+                        />
+                    )}
                 </div>
             </div>
 
-            {/* PCIe Section */}
-            <div>
-                <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-2">
-                        <h4 className="text-md font-semibold text-white">PCIe Link</h4>
-                        <div className="px-2 py-0.5 bg-dark-700 rounded text-xs font-mono text-white">
-                            Gen {pcie.gen}
-                        </div>
-                        <div className="px-2 py-0.5 bg-dark-700 rounded text-xs font-mono text-white">
-                            x{pcie.width}
-                        </div>
-                    </div>
-                    <div className="text-xs text-dark-400">
-                        Max: {(maxSpeedMB / 1024).toFixed(1)} GB/s
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <div>
-                        <div className="flex justify-between text-sm mb-1 text-dark-400">
-                            <span>TX (Transmit)</span>
-                            <div className="text-right">
-                                <span className="text-white font-mono mr-2">{formatSpeed(smoothedTx)}</span>
-                                <span className="text-xs text-dark-500" title="Linear Utilization">({txUtil.toFixed(2)}%)</span>
+            {/* PCIe Section — hidden for SoC GPUs */}
+            {hasPcie && (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                            <h4 className="text-md font-semibold text-white">PCIe Link</h4>
+                            <div className="px-2 py-0.5 bg-dark-700 rounded text-xs font-mono text-white">
+                                Gen {pcie.gen}
+                            </div>
+                            <div className="px-2 py-0.5 bg-dark-700 rounded text-xs font-mono text-white">
+                                x{pcie.width}
                             </div>
                         </div>
-                        <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-accent-cyan transition-all duration-300"
-                                style={{ width: `${Math.max(2, txLogUtil)}%` }} // Min 2% visibility if active
-                            />
+                        <div className="text-xs text-dark-400">
+                            Max: {(maxSpeedMB / 1024).toFixed(1)} GB/s
                         </div>
                     </div>
 
-                    <div>
-                        <div className="flex justify-between text-sm mb-1 text-dark-400">
-                            <span>RX (Receive)</span>
-                            <div className="text-right">
-                                <span className="text-white font-mono mr-2">{formatSpeed(smoothedRx)}</span>
-                                <span className="text-xs text-dark-500" title="Linear Utilization">({rxUtil.toFixed(2)}%)</span>
+                    <div className="space-y-4">
+                        <div>
+                            <div className="flex justify-between text-sm mb-1 text-dark-400">
+                                <span>TX (Transmit)</span>
+                                <div className="text-right">
+                                    <span className="text-white font-mono mr-2">{formatSpeed(smoothedTx)}</span>
+                                    <span className="text-xs text-dark-500" title="Linear Utilization">({txUtil.toFixed(2)}%)</span>
+                                </div>
+                            </div>
+                            <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-accent-cyan transition-all duration-300"
+                                    style={{ width: `${Math.max(2, txLogUtil)}%` }} // Min 2% visibility if active
+                                />
                             </div>
                         </div>
-                        <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-green-500 transition-all duration-300"
-                                style={{ width: `${Math.max(2, rxLogUtil)}%` }} // Min 2% visibility if active
-                            />
+
+                        <div>
+                            <div className="flex justify-between text-sm mb-1 text-dark-400">
+                                <span>RX (Receive)</span>
+                                <div className="text-right">
+                                    <span className="text-white font-mono mr-2">{formatSpeed(smoothedRx)}</span>
+                                    <span className="text-xs text-dark-500" title="Linear Utilization">({rxUtil.toFixed(2)}%)</span>
+                                </div>
+                            </div>
+                            <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-green-500 transition-all duration-300"
+                                    style={{ width: `${Math.max(2, rxLogUtil)}%` }} // Min 2% visibility if active
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
         </div>
     );

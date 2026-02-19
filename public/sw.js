@@ -14,8 +14,9 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // Pass through all requests to the network.
-    // We do NOT want to cache API responses or the app shell aggressively 
-    // without a more complex strategy, as this is a real-time dashboard.
-    event.respondWith(fetch(event.request));
+    // Let the browser handle all requests natively.
+    // Calling event.respondWith(fetch(...)) breaks streaming responses
+    // (e.g. SSE/chunked transfer from LLM endpoints) on concurrent requests.
+    // By not calling event.respondWith(), the browser uses its default fetch.
+    return;
 });

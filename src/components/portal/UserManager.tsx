@@ -468,7 +468,7 @@ export const UserManager = () => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-dark-950/50 border-b border-dark-800">
-                                        <th className="px-6 py-4 text-[10px] font-bold uppercase text-dark-500 tracking-wider">Time</th>
+                                        <th className="px-6 py-4 text-[10px] font-bold uppercase text-dark-500 tracking-wider">Date/Time</th>
                                         <th className="px-6 py-4 text-[10px] font-bold uppercase text-dark-500 tracking-wider">User</th>
                                         <th className="px-6 py-4 text-[10px] font-bold uppercase text-dark-500 tracking-wider">Model</th>
                                         <th className="px-6 py-4 text-[10px] font-bold uppercase text-dark-500 tracking-wider">Tokens</th>
@@ -479,7 +479,8 @@ export const UserManager = () => {
                                     {usageLogs.map((log: UsageLog) => (
                                         <tr key={log.id} className="hover:bg-dark-800/30 transition-colors">
                                             <td className="px-6 py-3 text-xs text-dark-400 font-mono">
-                                                {new Date(log.created_at).toLocaleTimeString()}
+                                                {new Date(log.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
+                                                {new Date(log.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                                             </td>
                                             <td className="px-6 py-3">
                                                 <p className="text-xs font-bold text-white">{log.profiles?.display_name || 'System'}</p>

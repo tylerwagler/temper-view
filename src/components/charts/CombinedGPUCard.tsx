@@ -49,15 +49,19 @@ interface CombinedGPUCardProps {
 }
 
 export const CombinedGPUCard: React.FC<CombinedGPUCardProps> = (props) => {
+    const hasPcie = props.pcie.gen > 0 || props.pcie.width > 0;
+
     return (
         <div className="bg-dark-800 rounded-lg p-4 border border-dark-700 h-full relative group">
             {/* Combined header */}
             <div className="flex justify-between items-center mb-2 pr-6">
                 <div className="flex items-center gap-3">
                     <h3 className="text-lg font-semibold text-white truncate" title={props.gpuName}>GPU: {props.gpuName}</h3>
-                    <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-accent-cyan border border-dark-600 cursor-help" title={`Performance State: ${props.pState.description}`}>
-                        P{props.pState.id}
-                    </span>
+                    {props.pState.id >= 0 && hasPcie && (
+                        <span className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-accent-cyan border border-dark-600 cursor-help" title={`Performance State: ${props.pState.description}`}>
+                            P{props.pState.id}
+                        </span>
+                    )}
                     {props.nvlink?.active && (
                         <span
                             className="px-2 py-0.5 rounded text-xs font-mono font-medium bg-dark-700 text-emerald-400 border border-dark-600 cursor-help"
@@ -101,6 +105,7 @@ export const CombinedGPUCard: React.FC<CombinedGPUCardProps> = (props) => {
                         powerLimitW={props.powerLimitW}
                         hardwareMaxW={props.hardwareMaxW}
                         gpuLabel="" // Don't show label since we have it in parent
+                        hasPcie={hasPcie}
                     // Don't pass onHide - we handle it at parent level
                     />
                 </div>
@@ -111,6 +116,7 @@ export const CombinedGPUCard: React.FC<CombinedGPUCardProps> = (props) => {
                         clocks={props.clocks}
                         pcie={props.pcie}
                         gpuLabel="" // Don't show label since we have it in parent
+                        hasPcie={hasPcie}
                     // Don't pass onHide - we handle it at parent level
                     />
                 </div>

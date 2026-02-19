@@ -1,0 +1,400 @@
+#!/bin/bash
+# claude-local — Claude Code wrapper for local AI Stack inference
+# All auth, key management, and inference go through a single portal URL.
+#
+# Usage:
+#   claude-local                    # Start Claude Code (prompts for setup if needed)
+#   claude-local --login            # Login and retrieve/create API key
+#   claude-local --set-key <key>    # Set API key manually
+#   claude-local --set-url <url>    # Set portal URL
+#   claude-local --config           # Show current config
+#   claude-local --update           # Update this script from the portal
+#   claude-local --reset-config     # Delete saved configuration
+
+SCRIPT_VERSION="1.0.1"
+
+CONFIG_DIR="$HOME/.config/claude-local"
+CONFIG_FILE="$CONFIG_DIR/env"
+
+# --- JSON helpers (jq preferred, python3 fallback) ---
+json_get() {
+    local json="$1" field="$2"
+    if command -v jq &> /dev/null; then
+        echo "$json" | jq -r "$field // empty" 2>/dev/null
+    else
+        echo "$json" | python3 -c "import sys,json; d=json.load(sys.stdin); v=$field; print(v if v is not None else '')" 2>/dev/null
+    fi
+}
+
+json_get_py() {
+    # For complex expressions that differ between jq and python
+    local json="$1" jq_expr="$2" py_expr="$3"
+    if command -v jq &> /dev/null; then
+        echo "$json" | jq -r "$jq_expr" 2>/dev/null
+    else
+        echo "$json" | python3 -c "import sys,json; data=json.load(sys.stdin); $py_expr" 2>/dev/null
+    fi
+}
+
+# --- Config management ---
+load_config() {
+    CLAUDE_LOCAL_API_KEY=""
+    CLAUDE_LOCAL_URL=""
+    if [ -f "$CONFIG_FILE" ]; then
+        while IFS='=' read -r key value; do
+            case "$key" in
+                CLAUDE_LOCAL_API_KEY) CLAUDE_LOCAL_API_KEY="$value" ;;
+                CLAUDE_LOCAL_URL) CLAUDE_LOCAL_URL="$value" ;;
+            esac
+        done < "$CONFIG_FILE"
+    fi
+}
+
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    {
+        [ -n "$CLAUDE_LOCAL_API_KEY" ] && echo "CLAUDE_LOCAL_API_KEY=$CLAUDE_LOCAL_API_KEY"
+        [ -n "$CLAUDE_LOCAL_URL" ] && echo "CLAUDE_LOCAL_URL=$CLAUDE_LOCAL_URL"
+    } > "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+}
+
+# --- Auth via ai-proxy endpoints ---
+do_login() {
+    local url="$1"
+
+    echo "Login to AI Stack" >&2
+    echo "" >&2
+
+    read -p "Email: " email
+    if [ -z "$email" ]; then
+        echo "Error: Email required" >&2
+        return 1
+    fi
+
+    read -sp "Password: " password
+    echo >&2
+    if [ -z "$password" ]; then
+        echo "Error: Password required" >&2
+        return 1
+    fi
+
+    # Build JSON payload
+    local json_payload
+    if command -v jq &> /dev/null; then
+        json_payload=$(jq -n --arg e "$email" --arg p "$password" '{email:$e, password:$p}')
+    else
+        local esc_pass="${password//\\/\\\\}"
+        esc_pass="${esc_pass//\"/\\\"}"
+        json_payload="{\"email\":\"${email}\",\"password\":\"${esc_pass}\"}"
+    fi
+
+    echo "Authenticating..." >&2
+    local response
+    response=$(curl -s -X POST "${url}/api/v1/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "$json_payload")
+
+    local access_token
+    access_token=$(json_get "$response" '.access_token')
+
+    if [ -z "$access_token" ]; then
+        local err
+        err=$(json_get_py "$response" '.error.message // .msg // "Authentication failed"' \
+            "e=data.get('error',{}); print(e.get('message','') if isinstance(e,dict) else data.get('msg','Authentication failed'))")
+        echo "" >&2
+        echo "Authentication failed: $err" >&2
+        echo "" >&2
+        echo "Common issues:" >&2
+        echo "  - Wrong password" >&2
+        echo "  - Email not registered (sign up at $url first)" >&2
+        echo "  - Email not confirmed" >&2
+        return 1
+    fi
+
+    # Check for existing keys
+    local key_count
+    key_count=$(json_get_py "$response" '.api_keys | length' \
+        "print(len(data.get('api_keys',[])))")
+
+    if [ "$key_count" -gt 0 ] 2>/dev/null; then
+        echo "" >&2
+        echo "Found $key_count existing API key(s):" >&2
+        json_get_py "$response" \
+            '(.api_keys | to_entries[] | "  \(.key+1). \(.value.name) (created: \(.value.created_at[:10]))")' \
+            "
+for i,k in enumerate(data.get('api_keys',[]),1):
+    print(f\"  {i}. {k.get('name','Unnamed')} (created: {str(k.get('created_at',''))[:10]})\")" >&2
+
+        echo "" >&2
+        echo "Select a key (1-${key_count}), or press Enter to create a new one:" >&2
+        read -r selection
+
+        if [ -n "$selection" ] && [ "$selection" -ge 1 ] && [ "$selection" -le "$key_count" ] 2>/dev/null; then
+            local selected_key
+            selected_key=$(json_get_py "$response" \
+                ".api_keys[$((selection-1))].api_key" \
+                "print(data['api_keys'][$((selection-1))]['api_key'])")
+            echo "Using existing API key." >&2
+            echo "$selected_key"
+            return 0
+        fi
+    fi
+
+    # Create new key
+    echo "Creating new API key..." >&2
+    local create_resp
+    create_resp=$(curl -s -X POST "${url}/api/v1/auth/keys" \
+        -H "Authorization: Bearer $access_token" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"claude-local-$(date +%Y%m%d-%H%M%S)\"}")
+
+    local new_key
+    new_key=$(json_get "$create_resp" '.api_key')
+
+    if [ -z "$new_key" ]; then
+        echo "Error: Failed to create API key" >&2
+        return 1
+    fi
+
+    local key_name
+    key_name=$(json_get "$create_resp" '.name')
+    echo "Created API key: $key_name" >&2
+    echo "$new_key"
+    return 0
+}
+
+# --- Load config ---
+load_config
+
+# --- Handle commands ---
+case "$1" in
+    --login)
+        if [ -z "$CLAUDE_LOCAL_URL" ]; then
+            read -p "Portal URL [https://ellie.elytrondefense.com]: " CLAUDE_LOCAL_URL
+            CLAUDE_LOCAL_URL="${CLAUDE_LOCAL_URL:-https://ellie.elytrondefense.com}"
+        fi
+
+        retrieved_key=$(do_login "$CLAUDE_LOCAL_URL")
+        if [ $? -eq 0 ] && [ -n "$retrieved_key" ]; then
+            CLAUDE_LOCAL_API_KEY="$retrieved_key"
+            save_config
+            echo ""
+            echo "API key configured successfully!"
+            echo "Config saved to: $CONFIG_FILE"
+            echo ""
+            echo "Run 'claude-local' to start Claude Code."
+        else
+            exit 1
+        fi
+        exit 0
+        ;;
+    --set-key)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 --set-key <api-key>"
+            exit 1
+        fi
+        CLAUDE_LOCAL_API_KEY="$2"
+        save_config
+        echo "API key saved."
+        exit 0
+        ;;
+    --set-url)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 --set-url <portal-url>"
+            exit 1
+        fi
+        CLAUDE_LOCAL_URL="$2"
+        save_config
+        echo "Portal URL saved."
+        exit 0
+        ;;
+    --config)
+        echo "Configuration ($CONFIG_FILE):"
+        if [ -n "$CLAUDE_LOCAL_API_KEY" ]; then
+            echo "  API Key: ${CLAUDE_LOCAL_API_KEY:0:10}... (set)"
+        else
+            echo "  API Key: (not set)"
+        fi
+        echo "  Portal URL: ${CLAUDE_LOCAL_URL:-(not set)}"
+        exit 0
+        ;;
+    --update)
+        if [ -z "$CLAUDE_LOCAL_URL" ]; then
+            echo "Error: Portal URL not configured. Run: $0 --set-url <url>"
+            exit 1
+        fi
+        echo "Updating claude-local from $CLAUDE_LOCAL_URL..."
+        script_path="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+        curl -fsSL "$CLAUDE_LOCAL_URL/install/claude-local" -o "$script_path"
+        chmod +x "$script_path"
+        echo "Updated successfully."
+        exit 0
+        ;;
+    --reset-config)
+        if [ -f "$CONFIG_FILE" ]; then
+            rm "$CONFIG_FILE"
+            echo "Configuration reset."
+        else
+            echo "No configuration file found."
+        fi
+        exit 0
+        ;;
+    --version)
+        echo "claude-local $SCRIPT_VERSION"
+        exit 0
+        ;;
+    --help|-h)
+        echo "claude-local $SCRIPT_VERSION — Claude Code with local AI inference"
+        echo ""
+        echo "Usage: claude-local [options] [claude args...]"
+        echo ""
+        echo "Options:"
+        echo "  --login           Login and get/create an API key"
+        echo "  --set-key <key>   Set API key manually"
+        echo "  --set-url <url>   Set portal URL (e.g., https://ellie.elytrondefense.com)"
+        echo "  --config          Show current configuration"
+        echo "  --update          Update this script from the portal"
+        echo "  --reset-config    Delete saved configuration"
+        echo "  --version         Show version"
+        echo "  --help            Show this help"
+        echo ""
+        echo "All other arguments are passed to 'claude' directly."
+        exit 0
+        ;;
+esac
+
+# --- Ensure URL is set ---
+if [ -z "$CLAUDE_LOCAL_URL" ]; then
+    read -p "Portal URL [https://ellie.elytrondefense.com]: " CLAUDE_LOCAL_URL
+    CLAUDE_LOCAL_URL="${CLAUDE_LOCAL_URL:-https://ellie.elytrondefense.com}"
+    save_config
+fi
+
+# --- Check for updates (non-blocking) ---
+check_update() {
+    local remote_version
+    remote_version=$(curl -fsSL --connect-timeout 2 --max-time 3 \
+        "${CLAUDE_LOCAL_URL}/install/version" 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$remote_version" ] && [ "$remote_version" != "$SCRIPT_VERSION" ]; then
+        echo "Update available: $SCRIPT_VERSION -> $remote_version" >&2
+        echo "  Run 'claude-local --update' to update." >&2
+        echo "" >&2
+    fi
+}
+# Run in background so it doesn't slow down launch
+check_update &
+
+# --- Ensure API key is set ---
+if [ -z "$CLAUDE_LOCAL_API_KEY" ]; then
+    echo "No API key configured." >&2
+    echo "" >&2
+    read -p "Would you like to log in now? (y/n): " -n 1 -r
+    echo >&2
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        retrieved_key=$(do_login "$CLAUDE_LOCAL_URL")
+        if [ $? -eq 0 ] && [ -n "$retrieved_key" ]; then
+            CLAUDE_LOCAL_API_KEY="$retrieved_key"
+            save_config
+            echo "" >&2
+            echo "API key configured! Starting Claude Code..." >&2
+            echo "" >&2
+        else
+            exit 1
+        fi
+    else
+        echo "" >&2
+        echo "Run '$0 --login' to authenticate, or '$0 --set-key <key>' to set manually." >&2
+        exit 1
+    fi
+fi
+
+# --- Validate API key ---
+echo "Validating API key..." >&2
+validation=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $CLAUDE_LOCAL_API_KEY" \
+    "${CLAUDE_LOCAL_URL}/api/v1/models" 2>/dev/null)
+http_code=$(echo "$validation" | tail -n1)
+
+if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+    echo "" >&2
+    echo "API key is invalid or expired." >&2
+    read -p "Would you like to log in again? (y/n): " -n 1 -r >&2
+    echo >&2
+
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        retrieved_key=$(do_login "$CLAUDE_LOCAL_URL")
+        if [ $? -eq 0 ] && [ -n "$retrieved_key" ]; then
+            CLAUDE_LOCAL_API_KEY="$retrieved_key"
+            save_config
+        else
+            exit 1
+        fi
+    else
+        exit 1
+    fi
+elif [ "$http_code" != "200" ]; then
+    echo "Warning: Could not validate API key (HTTP $http_code). Continuing..." >&2
+fi
+
+# --- Model selection if not specified ---
+has_model=false
+for arg in "$@"; do
+    if [[ "$arg" == "--model" ]] || [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "--version" ]] || [[ "$arg" == "-v" ]]; then
+        has_model=true
+        break
+    fi
+done
+
+if [ "$has_model" = false ]; then
+    # Fetch ready models from public endpoint (no auth needed)
+    models_raw=$(curl -s --connect-timeout 2 --max-time 10 \
+        "${CLAUDE_LOCAL_URL}/api/model/chat-models" 2>/dev/null)
+
+    # Parse into parallel arrays: ids and display labels
+    model_data=$(json_get_py "$models_raw" \
+        '.[] | "\(.id)\t\(.alias // .id)\t\(if .is_local then "Ellie" else "Sparky" end)"' \
+        "
+for m in (data if isinstance(data, list) else []):
+    alias = m.get('alias') or m.get('id','?')
+    host = 'Ellie' if m.get('is_local') else 'Sparky'
+    print(f\"{m.get('id','')}\t{alias}\t{host}\")")
+
+    if [ -n "$model_data" ]; then
+        mapfile -t model_lines <<< "$model_data"
+
+        if [ ${#model_lines[@]} -eq 1 ]; then
+            model_id=$(echo "${model_lines[0]}" | cut -f1)
+            model_label=$(echo "${model_lines[0]}" | cut -f2)
+            model_host=$(echo "${model_lines[0]}" | cut -f3)
+            echo "Using model: $model_label ($model_host)" >&2
+            set -- "$@" "--model" "$model_id"
+        elif [ ${#model_lines[@]} -gt 1 ]; then
+            echo "Select a model:" >&2
+            display_labels=()
+            model_ids=()
+            for line in "${model_lines[@]}"; do
+                mid=$(echo "$line" | cut -f1)
+                mlabel=$(echo "$line" | cut -f2)
+                mhost=$(echo "$line" | cut -f3)
+                display_labels+=("$mlabel ($mhost)")
+                model_ids+=("$mid")
+            done
+            select model_choice in "${display_labels[@]}"; do
+                if [ -n "$model_choice" ]; then
+                    idx=$((REPLY - 1))
+                    set -- "$@" "--model" "${model_ids[$idx]}"
+                    echo "Using model: $model_choice" >&2
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+
+# --- Launch Claude Code ---
+export ANTHROPIC_BASE_URL="${CLAUDE_LOCAL_URL}/api"
+export ANTHROPIC_API_KEY="$CLAUDE_LOCAL_API_KEY"
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+exec claude "$@"
